@@ -24,7 +24,7 @@
     <div v-if="!inChat" class="dash-scroll">
       <div class="home-content">
         <div class="lvyuan-page-intro">
-          <div class="intro-copy"><span class="intro-eyebrow"><span class="guofeng-seal" aria-hidden="true">游学</span>旅鸢 · 智能实训</span><h1>从了解中国，到定制一次好旅行</h1><p>在知识学习与真实场景之间，找到你的下一步。</p></div>
+          <div class="intro-copy"><span class="intro-eyebrow">旅鸢 · 智能实训</span><h1>从了解中国，到定制一次好旅行</h1><p>在知识学习与真实场景之间，找到你的下一步。</p></div>
           <span class="intro-status"><i :class="{ online: store.backendOnline }"></i>{{ store.backendOnline ? '实训服务已连接' : '等待服务连接' }}</span>
         </div>
         <!-- 后端状态提示 -->
