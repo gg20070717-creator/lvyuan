@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>实时语音链路测试 · 浏览器→后端→Qwen Realtime</title>
+<style>
+  :root { --gold:#C9A86A; --blue:#183A63; --bg:#F6F2EA; }
+  * { box-sizing:border-box; }
+  body { font-family:"Microsoft YaHei",system-ui,sans-serif; background:var(--bg); margin:0; color:#223; }
+  header { background:var(--blue); color:#fff; padding:14px 22px; font-size:16px; }
+  main { max-width:960px; margin:18px auto; padding:0 14px; display:grid; gap:14px; }
+  .card { background:#fff; border:1px solid #e4ddcf; border-radius:12px; padding:14px 16px; }
+  .card h3 { margin:0 0 10px; font-size:14px; color:var(--blue); }
+  label { font-size:12.5px; color:#555; margin-right:6px; }
+  select,input[type=text] { padding:6px 8px; border:1px solid #d5cdbd; border-radius:8px; font-size:13px; min-width:180px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+  button { padding:7px 16px; border:0; border-radius:8px; cursor:pointer; font-size:13px; background:var(--gold); color:#fff; }
+  button.sec { background:#ece7da; color:#333; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  #log { background:#0f1420; color:#cfe6ff; border-radius:10px; padding:10px; height:220px; overflow:auto;
+         font:12px/1.55 Consolas,monospace; white-space:pre-wrap; }
+  #meta { font-size:12.5px; color:#333; }
+  .badge { display:inline-block; background:rgba(201,168,106,.15); color:#8a6d2f; border:1px solid rgba(201,168,106,.4);
+           border-radius:20px; padding:2px 10px; font-size:12px; margin-right:6px; }
+</style>
+</head>
+<body>
+<header>实时语音链路测试 · 浏览器麦克风 → 后端 → Qwen-Omni-Realtime</header>
+<main>
+  <div class="card">
+    <h3>① 选择沙盒场景与训练语言（创建会话）</h3>
+    <div class="row">
+      <label>场景</label><select id="selTemplate"></select>
+      <label>训练语言</label><select id="selLang">
+        <option value="en">English (en)</option><option value="ja">日本語 (ja)</option>
+        <option value="fr">Français (fr)</option><option value="de">Deutsch (de)</option>
+        <option value="ko">한국어 (ko)</option><option value="es">Español (es)</option>
+        <option value="ru">Русский (ru)</option><option value="ar">العربية (ar)</option>
+        <option value="zh">中文 (zh)</option>
+      </select>
+      <label>用户ID</label><input id="inUser" type="text" value="voice-demo">
+      <button id="btnCreate">创建语音会话</button>
+    </div>
+    <div id="meta"></div>
+  </div>
+
+  <div class="card">
+    <h3>② 实时语音对话（游客语音会自动播放；也可先打字测试）</h3>
+    <div class="row">
+      <button id="btnConnect" disabled>接通游客语音</button>
+      <button id="btnStop" disabled>挂断/停止</button>
+      <span id="state" style="font-size:12.5px;color:#666;">未连接</span>
+    </div>
+    <div class="row">
+      <input id="inText" type="text" style="flex:1;min-width:260px;" placeholder="以导游身份输入一句外语台词（先验证通道）…">
+      <button id="btnSend" disabled>发送(文字)</button>
+    </div>
+    <div class="row"><span class="badge" id="bTpl">-</span><span class="badge" id="bLang">-</span><span class="badge" id="bVoice">-</span><span class="badge" id="bCust">-</span></div>
+  </div>
+
+  <div class="card">
+    <h3>③ 事件 / 转写日志（[游客]=模型语音文本，[你]=你的语音识别）</h3>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const logBox = $('log');
+function log(cls, txt){
+  const d = document.createElement('div');
+  d.style.color = cls === 'you' ? '#9fe6a0' : cls === 'tourist' ? '#ffd98a' : cls === 'err' ? '#ff8f8f' : '#b9d6ff';
+  d.textContent = txt;
+  logBox.appendChild(d);
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+let templates = [];
+let sessionId = null;
+let ws = null;
+let audioCtx = null, micStream = null, scriptNode = null, srcNode = null;
+let ds = null;               // 16k downsampler
+let schedTime = 0;
+let transcripts = { tourist: '', you: '' };
+
+async function loadTemplates(){
+  const r = await fetch('/sandbox/templates');
+  const j = await r.json();
+  templates = j.templates || [];
+  const sel = $('selTemplate');
+  sel.innerHTML = '';
+  const order = { fullflow: 0, scenario: 1, narrate: 2 };
+  templates.sort((a,b)=>(order[a.mode]??9)-(order[b.mode]??9) || a.title.localeCompare(b.title,'zh'));
+  for (const t of templates){
+    const o = document.createElement('option');
+    o.value = t.template_id;
+    o.textContent = `[${t.mode}] ${t.title}（${t.stage_count}阶段）`;
+    sel.appendChild(o);
+  }
+}
+$('btnCreate').onclick = async () => {
+  const template_id = $('selTemplate').value;
+  const language = $('selLang').value;
+  const user_id = $('inUser').value.trim() || 'voice-demo';
+  const r = await fetch('/sandbox/sessions', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ user_id, template_id, language, voice: '' }),
+  });
+  const j = await r.json();
+  if (!r.ok){ log('err', '创建会话失败: ' + (j.detail || JSON.stringify(j))); return; }
+  sessionId = j.session_id;
+  const c = j.customer || {};
+  $('bTpl').textContent = j.template?.title || template_id;
+  $('bLang').textContent = '语言: ' + (j.language || '传统文字');
+  $('bVoice').textContent = '音色: ' + (j.voice || '自动');
+  $('bCust').textContent = '游客: ' + (c.name||'') + ' ' + (c.nationality||'') + ' ' + (c.age||'') + '岁' + (c.gender||'');
+  $('meta').innerHTML = '会话ID: <code>' + sessionId + '</code>　游客人设：' +
+    (c.personality||'') + ' / ' + (c.occupation||'');
+  $('btnConnect').disabled = false;
+  log('info', '已创建会话 ' + sessionId + '，语言=' + (j.language||'-') + '，音色=' + (j.voice||'-'));
+};
+
+function openWs(){
+  if (!sessionId) return;
+  const user_id = $('inUser').value.trim() || 'voice-demo';
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/voice/realtime/${sessionId}?user_id=${encodeURIComponent(user_id)}`);
+  ws.onopen = () => { log('info', '[ws] 已连接'); setState('已连接，等待会话就绪'); };
+  ws.onclose = () => { log('info', '[ws] 已断开'); setState('已断开'); $('btnSend').disabled = true; stopMicCapture(); };
+  ws.onerror = (e) => { log('err', '[ws] 错误 ' + (e && e.message ? e.message : '')); };
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch(e){ return; }
+    handleEvent(m);
+  };
+}
+
+function handleEvent(m){
+  const t = m.type || '';
+  if (t === 'session.meta'){
+    log('info', '[meta] ' + JSON.stringify(m.customer||{}) + '  voice=' + m.voice);
+    $('bVoice').textContent = '音色: ' + (m.voice || '?');
+    $('bLang').textContent = '语言: ' + m.language;
+  } else if (t === 'ready'){
+    log('info', '[ready] 游客已就绪，可以开始说话');
+    setState('对话中（对麦克风说话）');
+    $('btnSend').disabled = false;
+  } else if (t === 'response.audio.delta'){
+    const audio = m.delta || '';
+    if (audio && audioCtx) playPcm24k(audio);
+  } else if (t === 'response.audio_transcript.delta'){
+    transcripts.tourist += m.delta || '';
+  } else if (t === 'response.audio_transcript.done'){
+    log('tourist', '[游客] ' + (m.transcript || transcripts.tourist));
+    transcripts.tourist = '';
+  } else if (t === 'conversation.item.input_audio_transcription.delta'){
+    const txt = (m.text || '') + (m.stash || '');
+    if (txt) log('you', '[你…] ' + txt.slice(-120));
+  } else if (t === 'conversation.item.input_audio_transcription.completed'){
+    if (m.transcript) log('you', '[你] ' + m.transcript);
+  } else if (t === 'input_audio_buffer.speech_started'){ log('info', '[VAD] 检测到你开始说话…'); }
+  else if (t === 'input_audio_buffer.speech_stopped'){ log('info', '[VAD] 说话结束'); }
+  else if (t === 'error'){
+    log('err', '[error] ' + JSON.stringify(m.error || m));
+  } else if (t === 'closed'){ log('info', '[closed] ' + (m.message || '')); }
+}
+
+function setState(s){ $('state').textContent = s; }
+
+// ---------- 上行：麦克风 → 16k PCM ----------
+class Downsampler16k {
+  constructor(inRate){ this.rate = inRate; this.step = this.rate / 16000; this.data = []; this.cursor = 0; }
+  push(ch){
+    for (let i=0;i<ch.length;i++) this.data.push(ch[i]);
+    this._drain();
+  }
+  _drain(){
+    const frame = 1600;
+    while (this.cursor + this.step * frame <= this.data.length){
+      const out = new Int16Array(frame);
+      for (let o=0;o<frame;o++){
+        const sp = this.cursor + o*this.step;
+        const i0 = Math.floor(sp), i1 = Math.min(i0+1, this.data.length-1), f = sp - i0;
+        const v = this.data[i0] + (this.data[i1]-this.data[i0])*f;
+        out[o] = (Math.max(-1, Math.min(1, v)) * 32767) | 0;
+      }
+      this.cursor += this.step * frame;
+      if (ws && ws.readyState === WebSocket.OPEN){
+        ws.send(JSON.stringify({ type:'audio', audio: b64FromInt16(out) }));
+      }
+    }
+    if (this.cursor > this.rate * 2){ this.data = this.data.slice(this.cursor); this.cursor = 0; }
+  }
+}
+
+function b64FromInt16(arr){
+  const bytes = new Uint8Array(arr.buffer);
+  let s = '';
+  const CH = 0x8000;
+  for (let i=0;i<bytes.length;i+=CH){
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i+CH));
+  }
+  return btoa(s);
+}
+
+async function startMicCapture(){
+  if (!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
+  }
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  srcNode = audioCtx.createMediaStreamSource(micStream);
+  scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+  ds = new Downsampler16k(audioCtx.sampleRate);
+  srcNode.connect(scriptNode);
+  scriptNode.connect(audioCtx.destination); // 仅用于保持运行
+  scriptNode.onaudioprocess = (e) => { if (ds) ds.push(e.inputBuffer.getChannelData(0)); };
+}
+
+function stopMicCapture(){
+  try { if (scriptNode) scriptNode.disconnect(); } catch(e){}
+  try { if (srcNode) srcNode.disconnect(); } catch(e){}
+  try { if (micStream) micStream.getTracks().forEach(t => t.stop()); } catch(e){}
+  scriptNode = null; srcNode = null; micStream = null; ds = null;
+}
+
+// ---------- 下行：24k PCM 播放 ----------
+function playPcm24k(b64){
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  const n = Math.floor(bytes.length / 2);
+  if (!n) return;
+  const f32 = new Float32Array(n);
+  for (let i=0;i<n;i++){
+    let s = bytes[2*i] | (bytes[2*i+1] << 8);
+    if (s >= 32768) s -= 65536;
+    f32[i] = s / 32768;
+  }
+  const buf = audioCtx.createBuffer(1, n, 24000);
+  buf.copyToChannel(f32, 0);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(audioCtx.destination);
+  const t = Math.max(audioCtx.currentTime + 0.02, schedTime);
+  src.start(t);
+  schedTime = t + buf.duration;
+}
+
+// ---------- 控制 ----------
+$('btnConnect').onclick = async () => {
+  try { await startMicCapture(); } catch(e){ log('err', '麦克风不可用（仍可打字测试）：' + e.message); }
+  openWs();
+  $('btnStop').disabled = false;
+  $('btnConnect').disabled = true;
+};
+$('btnStop').onclick = () => { if (ws) ws.close(); setState('已停止'); $('btnStop').disabled = true; $('btnConnect').disabled = false; };
+$('btnSend').onclick = () => {
+  const text = $('inText').value.trim();
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type:'text', text }));
+  log('you', '[打字] ' + text);
+  $('inText').value = '';
+};
+$('inText').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') $('btnSend').onclick(); });
+
+loadTemplates().catch(e => log('err', '加载模板失败：' + e.message));
+</script>
+</body>
+</html>

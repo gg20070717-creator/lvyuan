@@ -1,0 +1,66 @@
+/* ══════════════════════════════════════════════
+   司南礼客 · 设计令牌 (Design Tokens)
+   复刻自队友设计参考，适配 Vue 3 + Element Plus
+   ══════════════════════════════════════════════ */
+
+// ── 品牌色 ──
+$color-primary: #183A63;        // 深海军蓝 — 主色
+$color-primary-light: #1e4a80;
+$color-primary-dark: #12304f;
+$color-accent: #C9A86A;         // 香槟金 — 点缀色
+$color-accent-light: rgba(201, 168, 106, 0.15);
+
+// ── 中性色 ──
+$color-bg: #FAF8F3;             // 暖白背景
+$color-bg-dark: #0a1929;        // Welcome 页深色背景
+$color-surface: #FFFFFF;        // 卡片白
+$color-border: #E9E5DE;         // 暖灰边框
+$color-secondary-bg: #F5F1E8;   // 次要暖灰背景
+$color-muted-bg: #F0EDE6;       // 更浅灰背景
+
+// ── 文字色 ──
+$color-text: #202020;           // 主文字
+$color-text-secondary: #6F6F6F; // 次要文字
+$color-text-on-dark: rgba(255, 255, 255, 0.9);
+$color-text-on-dark-muted: rgba(255, 255, 255, 0.55);
+
+// ── 字体 ──
+$font-sans: 'Noto Sans SC', sans-serif;
+$font-serif: 'Noto Serif SC', serif;
+
+// ── 圆角 ──
+$radius-sm: 0.5rem;
+$radius-md: 0.75rem;
+$radius-lg: 1rem;
+$radius-xl: 1.25rem;
+
+// ── 阴影 ──
+$shadow-card: 0 2px 8px rgba(24, 58, 99, 0.05);
+$shadow-card-hover: 0 4px 16px rgba(24, 58, 99, 0.1);
+$shadow-dark-card: 0 20px 60px rgba(0, 0, 0, 0.4);
+
+// ── 预计算变体（替代弃用的 darken()） ──
+$color-primary-d3: #153355;       // darken 3%
+$color-primary-d10: #0d2747;      // darken 10%
+$color-accent-d10: #b49555;       // darken 10%
+$color-accent-d15: #a98c4a;       // darken 15%
+$color-border-d10: #d5cec3;       // darken 10%
+
+// ── 侧栏 ──
+$sidebar-width: 220px;
+$sidebar-collapsed-width: 64px;
+
+// ── Element Plus 主题覆盖 (CSS Variables) ──
+:root {
+  --el-color-primary: #{$color-primary};
+  --el-color-primary-light-3: #{$color-primary-light};
+  --el-color-primary-dark-2: #{$color-primary-dark};
+  --el-color-accent: #{$color-accent};
+  --el-border-radius-base: #{$radius-md};
+  --el-bg-color: #{$color-bg};
+  --el-bg-color-overlay: #{$color-surface};
+  --el-border-color: #{$color-border};
+  --el-text-color-primary: #{$color-text};
+  --el-text-color-regular: #{$color-text-secondary};
+  --el-font-family: #{$font-sans};
+}

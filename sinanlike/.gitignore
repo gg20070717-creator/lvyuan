@@ -1,0 +1,11 @@
+# Track the current frontend; keep portable deployment local.
+/*
+!/frontend/
+!/.gitignore
+/frontend/node_modules/
+/frontend/dist/
+/frontend/release/
+/frontend/build_res/
+/frontend/.env
+/frontend/.env.local
+*.local

@@ -1,0 +1,27 @@
+{
+  "system": {
+    "description": "在 profiles_sample 标注集上自动校准的推荐阈值",
+    "thresholds": [
+      {
+        "max": 0.41,
+        "star": 1
+      },
+      {
+        "max": 0.535,
+        "star": 2
+      },
+      {
+        "max": 0.735,
+        "star": 3
+      },
+      {
+        "max": 0.88,
+        "star": 4
+      },
+      {
+        "max": 1.01,
+        "star": 5
+      }
+    ]
+  }
+}

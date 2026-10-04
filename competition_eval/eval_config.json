@@ -1,0 +1,26 @@
+{
+  "generator": {
+    "mode": "internal",
+    "http": {
+      "url": "",
+      "method": "POST",
+      "json_keys": {
+        "skill_id": "skill_id",
+        "title": "title",
+        "keywords": "keywords",
+        "profile": "profile"
+      },
+      "content_field": "content"
+    }
+  },
+  "api_key_env": "DEEPSEEK_API_KEY",
+  "coverage": {
+    "keywords_top": 8,
+    "threshold": 0.5
+  },
+  "sample": {
+    "count": 56,
+    "per_book": 8
+  }
+}
+

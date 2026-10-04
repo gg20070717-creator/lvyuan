@@ -1,0 +1,27 @@
+{
+  "system": {
+    "description": "当前系统的‘掌握度(mastery_0_1)→推荐难度档(1-5)’规则（演示用；可替换为真实 decide_difficulty 口径）",
+    "thresholds": [
+      {
+        "max": 0.35,
+        "star": 1
+      },
+      {
+        "max": 0.55,
+        "star": 2
+      },
+      {
+        "max": 0.7,
+        "star": 3
+      },
+      {
+        "max": 0.85,
+        "star": 4
+      },
+      {
+        "max": 1.01,
+        "star": 5
+      }
+    ]
+  }
+}

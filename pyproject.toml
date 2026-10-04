@@ -1,0 +1,36 @@
+[project]
+name = "brain-of-cloud"
+version = "0.1.0"
+description = "Inbound-tour local-guide multi-agent training MVP"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "openai>=1.50",
+  "pydantic>=2.8",
+  "rich>=13.0",
+  "uvicorn>=0.30",
+  "faster-whisper>=1.0",
+  "python-multipart>=0.0.9",
+  "websocket-client>=1.8",   # Qwen-Omni-Realtime 服务端客户端
+  "websockets>=12.0",        # FastAPI WebSocket 中继（uvicorn 协议支持）
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "httpx>=0.27",
+]
+
+[project.scripts]
+boc-dev = "brain_of_cloud.tui.launcher:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["brain_of_cloud*"]
+
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"

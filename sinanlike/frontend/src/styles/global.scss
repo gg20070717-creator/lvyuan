@@ -1,0 +1,70 @@
+/* ══════════════════════════════════════════════
+   旅鸢 · 全局样式
+   ══════════════════════════════════════════════ */
+
+@use './tokens.scss' as *;
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: $font-sans;
+  font-size: 16px;
+  color: $color-text;
+  background: $color-bg;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}
+
+a {
+  color: $color-primary;
+  text-decoration: none;
+}
+
+// ── 滚动条美化 ──
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: $color-border;
+  border-radius: 3px;
+  &:hover {
+    background: $color-border-d10;
+  }
+}
+
+// ── Element Plus 微调 ──
+.el-menu {
+  border-right: none !important;
+}
+
+.el-card {
+  border-radius: $radius-xl !important;
+}
+
+// ── 通用工具类 ──
+.font-serif {
+  font-family: $font-serif;
+}
+
+.text-accent {
+  color: $color-accent;
+}
+
+.bg-accent-soft {
+  background: $color-accent-light;
+}
