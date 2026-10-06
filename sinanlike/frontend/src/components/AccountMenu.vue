@@ -1,19 +1,19 @@
 <template>
-  <div class="acm">
-    <button class="acm-user" @click.stop="open = !open" :title="'当前用户：' + store.currentName()">
-      <span class="acm-av">{{ char }}
+  <div class="acm" :class="{ compact }">
+    <button class="acm-user" @click.stop="toggle" :title="store.isSignedIn ? '当前用户：' + store.currentName() : '登录 / 注册'" :aria-expanded="store.isSignedIn ? open : undefined">
+      <span class="acm-av"><template v-if="store.isSignedIn">{{ char }}</template><SIcon v-else name="user" :size="17" />
         <i class="conn" :class="{ on: app.backendOnline }"
           :title="app.backendOnline ? '后端已连接' : '离线 · 演示模式'"></i>
       </span>
       <span class="acm-txt">
-        <span class="n">{{ store.currentName() }}</span>
-        <span class="d">切换 / 新建 / 删除用户</span>
+        <span class="n">{{ store.isSignedIn ? store.currentName() : '登录 / 注册' }}</span>
+        <span class="d">{{ store.isSignedIn ? (onb.done ? '你的学习空间' : '继续完善学情画像') : '游客浏览 · 开启专属学习' }}</span>
       </span>
       <SIcon class="chev" :name="open ? 'up' : 'right'" :size="11" />
     </button>
 
-    <div v-if="open" class="acm-panel">
-      <template v-if="!showNew">
+    <Transition name="account-menu">
+    <div v-if="open && store.isSignedIn" class="acm-panel">
         <div class="acm-title">切换用户</div>
         <button v-for="a in store.accounts" :key="a.id" class="acm-item"
           :class="{ cur: a.id === store.activeId }" @click.stop="pick(a.id)">
@@ -22,50 +22,35 @@
           <span v-if="a.id === store.activeId" class="acm-cur">当前</span>
         </button>
         <div class="acm-actions">
-          <button class="acm-act primary" @click.stop="showNew = true"><SIcon name="plus" :size="12" />新建用户</button>
+          <button v-if="!onb.done" class="acm-act primary" @click.stop="open = false; store.openOnboarding()"><SIcon name="sparkle" :size="12" />继续学情画像</button>
+          <button class="acm-act" @click.stop="open = false; store.openAccess()"><SIcon name="plus" :size="12" />注册新账户</button>
+          <button class="acm-act" @click.stop="logout"><SIcon name="back" :size="12" />退出登录</button>
           <button class="acm-act danger" @click.stop="onClear"><SIcon name="x" :size="12" />清空本用户数据</button>
           <button class="acm-act danger" @click.stop="onRemove"><SIcon name="x" :size="12" />删除本用户</button>
         </div>
-        <div class="acm-tip">每个用户的画像、进度、错题、会话、路线互相独立。新建可选择内置「测试画像」一键演示，或从 0 开始。</div>
-      </template>
-
-      <template v-else>
-        <div class="acm-title">新建用户 · 选择初始画像</div>
-        <button class="acm-tpl" @click.stop="onPickProfile(null)">
-          <span class="acm-tpl-em">✨</span>
-          <span class="acm-tpl-t">
-            <b>从 0 开始</b>
-            <i>空白账户，进入后完成先验学情画像</i>
-          </span>
-        </button>
-        <button v-for="tp in TEST_PROFILES" :key="tp.id" class="acm-tpl" @click.stop="onPickProfile(tp)">
-          <span class="acm-tpl-em">{{ tp.emoji }}</span>
-          <span class="acm-tpl-t">
-            <b>{{ tp.label }}</b>
-            <i>{{ tp.desc }}</i>
-          </span>
-        </button>
-        <div class="acm-actions">
-          <button class="acm-act" @click.stop="showNew = false"><SIcon name="back" :size="12" />返回账户列表</button>
-        </div>
-      </template>
+        <div class="acm-tip">各账户的画像、学习进度和对话独立保存。</div>
     </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import SIcon from '@/components/SIcon.vue'
 import { useAppStore } from '@/stores/app'
 import { useAccountsStore } from '@/stores/accounts'
-import { TEST_PROFILES } from '@/data/testProfiles'
-import type { TestProfile } from '@/data/testProfiles'
+import { useOnboardingStore } from '@/stores/onboarding'
 
 const store = useAccountsStore()
 const app = useAppStore()
 const open = ref(false)
-const showNew = ref(false)
+const onb = useOnboardingStore()
+const router = useRouter()
+defineProps<{ compact?: boolean }>()
+function toggle() { if (!store.isSignedIn) store.openAccess(); else open.value = !open.value }
+function logout() { open.value = false; store.signOut(); void router.push('/app/home') }
 
 const char = computed(() => {
   const n = store.currentName() || '账'
@@ -76,12 +61,6 @@ function pick(id: string) {
   if (id === store.activeId) { open.value = false; return }
   open.value = false
   store.switchTo(id)
-}
-
-function onPickProfile(tp: TestProfile | null) {
-  open.value = false
-  showNew.value = false
-  void store.createAccount({ name: tp ? `测试·${tp.label}` : undefined, answers: tp?.answers })
 }
 
 async function onClear() {
@@ -100,7 +79,7 @@ async function onRemove() {
   open.value = false
   try {
     await ElMessageBox.confirm(
-      '将删除本用户：服务端该账户的全部数据会被清除，且该账户会从列表移除（若只剩它，会自动新建“账户 1”）。确定删除吗？',
+      '将删除本账户及其全部学习数据，其他账户会保留。确定删除吗？',
       '删除本用户',
       { type: 'warning', confirmButtonText: '删除账户', cancelButtonText: '取消' },
     )
@@ -110,7 +89,7 @@ async function onRemove() {
 
 const onClickOutside = (e: MouseEvent) => {
   const el = document.querySelector('.acm-panel')
-  if (el && !el.contains(e.target as Node)) { open.value = false; showNew.value = false }
+  if (el && !el.contains(e.target as Node)) open.value = false
 }
 onMounted(() => document.addEventListener('click', onClickOutside))
 onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
@@ -120,6 +99,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
 @use '@/styles/tokens' as *;
 
 .acm { position: relative; padding: 0 8px 10px; }
+.acm.compact { padding: 0 0 10px; .acm-user { justify-content: center; } .acm-txt, .chev { display: none; } .acm-panel { width: 220px; right: auto; left: 4px; } }
+.account-menu-enter-active, .account-menu-leave-active { transition: opacity .18s ease, transform .2s ease; }
+.account-menu-enter-from, .account-menu-leave-to { opacity: 0; transform: translateY(8px); }
+@media (prefers-reduced-motion: reduce) { .account-menu-enter-active, .account-menu-leave-active { transition: none; } }
 .acm-user { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 6px; background: transparent; border: none; border-radius: 10px; cursor: pointer; color: $color-text; text-align: left;
   &:hover { background: rgba(255,255,255,.08); }
   .acm-av { position: relative; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, $color-accent, $color-accent-d15); color: #fff; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;

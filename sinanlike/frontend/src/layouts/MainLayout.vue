@@ -1,5 +1,6 @@
 <template>
   <div class="main-layout" :class="{ 'route-preserved': route.path === '/app/path' }">
+    <AccountFlow />
     <!-- ── 侧栏导航（官方 logo · 可伸缩 · 参考队友视觉） ── -->
     <aside class="sb" :class="{ collapsed: appStore.sidebarCollapsed }">
       <!-- 品牌区（logo 图形 + 文字标 + 伸缩按钮）；收缩态点击 logo 展开 -->
@@ -36,7 +37,7 @@
       </nav>
 
       <!-- 连续学习卡 -->
-      <div v-if="!appStore.sidebarCollapsed" class="sb-streak">
+      <div v-if="!appStore.sidebarCollapsed && accountsStore.isSignedIn" class="sb-streak">
         <div class="streak-card">
           <div class="streak-top">
             <SIcon name="flame" :size="14" color="#338FF2" />
@@ -51,13 +52,13 @@
       </div>
 
       <!-- 用户/账户行：点击切换账户 -->
-      <AccountMenu v-if="!appStore.sidebarCollapsed" />
+      <AccountMenu :compact="appStore.sidebarCollapsed" />
     </aside>
 
     <!-- ── 主内容区（视图自带页头，无全局顶栏） ── -->
     <main class="sb-main">
       <router-view v-slot="{ Component }">
-        <keep-alive>
+        <keep-alive :key="appStore.userId">
           <component :is="Component" />
         </keep-alive>
       </router-view>
@@ -66,17 +67,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAccountsStore } from '@/stores/accounts'
 import AccountMenu from '@/components/AccountMenu.vue'
+import AccountFlow from '@/components/AccountFlow.vue'
+import { useOnboardingStore } from '@/stores/onboarding'
 import SIcon from '@/components/SIcon.vue'
 import logoMark from '@/assets/lvyuan-logo.jpg'
 
 const route = useRoute()
 const appStore = useAppStore()
 const accountsStore = useAccountsStore()
+const onb = useOnboardingStore()
+watch(() => accountsStore.userId, () => {
+  if (accountsStore.isSignedIn) {
+    if (onb.loadedUserId !== accountsStore.userId) void onb.load(accountsStore.userId)
+  } else onb.clearSession()
+}, { immediate: true })
 
 // ── 侧栏导航项（SIcon 线性图标） ──
 const navItems = [

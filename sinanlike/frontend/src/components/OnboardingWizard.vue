@@ -1,336 +1,410 @@
 <template>
-  <div class="onb-wrap">
-    <div class="onb-card">
-      <div class="onb-head">
-        <span class="onb-title"><i class="ob-dot"></i>先验学情画像</span>
-        <span class="onb-step">{{ stepLabel }}</span>
-      </div>
-
-      <!-- ① 管家对话身份题 -->
-      <div v-if="stage === 'qa'" class="ob-body qa">
-        <div ref="qaScroll" class="ob-chat">
-          <div v-for="(b, i) in bubbles" :key="i" class="bubble-row" :class="b.role">
-            <span v-if="b.role === 'assistant'" class="b-av"><img :src="brandLogo" alt="旅鸢" /></span>
-            <div class="b-main">
-              <div class="bubble" :class="b.role">{{ b.text }}</div>
-              <!-- 管家出的身份题卡 -->
-              <div v-if="b.qa" class="qa-card">
-                <div class="qa-q">{{ b.qa.question }}</div>
-                <div class="qa-opts">
-                  <button v-for="op in b.qa.options" :key="op.id" class="qa-opt"
-                    :disabled="answering" @click="choose(b.qa!, op)">
-                    <i></i>{{ op.label }}
-                  </button>
-                </div>
-              </div>
+  <section class="onboarding-dialog ow-screen" role="dialog" aria-modal="true" aria-label="先验学情画像">
+      <header class="ow-header">
+        <div class="ow-brand"><img :src="brandLogo" alt="旅鸢飞鸟与书本 logo" /><span>旅鸢</span></div>
+        <span class="ow-header-divider" aria-hidden="true"></span><h1>先验学情画像</h1>
+        <span class="ow-header-note">为你找到合适的学习起点</span>
+        <button class="ow-return" :disabled="busy" @click="emit('cancel')">稍后继续</button>
+      </header>
+    <div class="ow-screen-body">
+    <nav class="ow-flow" aria-label="学情画像完整流程"><ol>
+      <li v-for="(item, index) in flow" :key="item.id" :class="{ current: stage === item.id, done: stageIndex > index }">
+        <button :disabled="busy || index > reachableStage" :aria-current="stage === item.id ? 'step' : undefined" @click="goStage(item.id)">
+          <span class="ow-node"><SIcon v-if="stageIndex > index" name="check" :size="16" /><template v-else>{{ String(index + 1).padStart(2, '0') }}</template></span>
+          <span><strong>{{ item.title }}</strong><small>{{ stage === item.id ? '进行中' : stageIndex > index ? '已完成' : item.note }}</small></span>
+        </button>
+      </li>
+    </ol></nav>
+    <main ref="mainRef" class="ow-main" :aria-busy="busy">
+      <div v-if="loading" class="ow-empty" role="status"><span class="ow-spinner"></span><p>正在准备你的学情测试…</p></div>
+      <div v-else-if="!ready" class="ow-empty"><SIcon name="warn" :size="28" /><h2>测试内容暂时无法加载</h2><p role="alert">{{ error }}</p><button class="ow-btn primary" @click="initialize">重新加载</button></div>
+      <div v-else class="ow-layout">
+        <aside class="ow-sidebar">
+          <div class="ow-eyebrow">{{ sidebarCopy.eyebrow }}</div><h2>{{ sidebarCopy.title }}</h2><p class="ow-sidebar-description">{{ sidebarCopy.description }}</p>
+          <nav v-if="stage === 'qa'" class="ow-directory" aria-label="身份题目录">
+            <button v-for="(q, index) in questions" :key="q.id" :class="{ active: questionIndex === index, answered: !!answers[q.id] && index < serverStep }"
+              :disabled="busy || index > serverStep" :aria-current="questionIndex === index ? 'step' : undefined" @click="reviewQuestion(index)">
+              <span class="ow-directory-dot" aria-hidden="true"></span><span>{{ questionTopic(q, index) }}</span><SIcon v-if="answers[q.id] && index < serverStep" name="check" :size="13" />
+            </button>
+          </nav>
+          <nav v-else-if="stage === 'groups'" class="ow-directory ow-domain-directory" aria-label="能力自评知识域">
+            <button v-for="(domain, index) in domains" :key="domain.id" :class="{ active: domainIndex === index }" :disabled="busy" :aria-current="domainIndex === index ? 'step' : undefined" @click="selectDomain(index)">
+              <span class="ow-directory-dot" aria-hidden="true"></span><span>{{ domain.title }}</span><small>{{ chosenCountOf(domain) }}/{{ domain.groups.length }}</small>
+            </button>
+          </nav>
+          <div v-else class="ow-summary"><span>能力自评</span><strong>{{ domains.length }} 个知识域 · {{ totalGroups }} 个分组</strong><span>你的选择</span><strong>{{ masteredCount }} 组已掌握 · {{ totalGroups - masteredCount }} 组需要学习</strong></div>
+          <div class="ow-sidebar-art" aria-hidden="true"><GuofengLandscape /><span>让专业生长，让旅途有温度</span></div>
+        </aside>
+        <div class="ow-content">
+          <div v-if="error" class="ow-error" role="alert"><SIcon name="warn" :size="16" /><span>{{ error }}</span></div>
+          <section v-if="stage === 'qa' && currentQuestion" class="ow-panel" aria-labelledby="ow-question-title">
+            <div class="ow-meta"><span>身份与目标</span><span>第 {{ String(questionIndex + 1).padStart(2, '0') }} / {{ String(questions.length).padStart(2, '0') }} 题</span><div class="ow-question-progress" aria-hidden="true"><i v-for="(_, index) in questions" :key="index" :class="{ filled: index <= questionIndex }"></i></div></div>
+            <h2 id="ow-question-title" ref="headingRef" tabindex="-1">{{ currentQuestion.question }}</h2><p class="ow-help">选择最符合你当前情况的一项。</p>
+            <fieldset class="ow-options"><legend class="ow-sr-only">{{ currentQuestion.question }}</legend>
+              <label v-for="(option, index) in currentQuestion.options" :key="option.id" class="ow-option" :class="{ selected: answers[currentQuestion.id] === option.id, disabled: busy }">
+                <span class="ow-option-letter" aria-hidden="true">{{ String.fromCharCode(65 + index) }}</span><span class="ow-option-text">{{ option.label }}</span>
+                <input type="radio" name="onboarding-identity" :value="option.id" :checked="answers[currentQuestion.id] === option.id" :disabled="busy" @change="selectAnswer(option.id)" />
+              </label>
+            </fieldset>
+            <p class="ow-panel-note"><SIcon name="book" :size="15" />根据实际情况作答，旅鸢会结合你的起点安排学习内容。</p>
+          </section>
+          <section v-else-if="stage === 'groups' && currentDomain" class="ow-panel" aria-labelledby="ow-domain-title">
+            <div class="ow-meta"><span>能力自评</span><span>第 {{ domainIndex + 1 }} / {{ domains.length }} 域</span></div>
+            <h2 id="ow-domain-title" ref="headingRef" tabindex="-1">{{ currentDomain.title }}</h2><p class="ow-help">确认哪些内容已经掌握，哪些内容希望继续学习。</p>
+            <div class="ow-domain-toolbar"><span>{{ chosenCountOf(currentDomain) }} / {{ currentDomain.groups.length }} 组已选择</span><div class="ow-segments">
+              <button class="ow-mini" :disabled="busy" :aria-pressed="domainStatusOf(currentDomain) === 'mastered'" @click="setDomain(currentDomain, 'mastered')">本域已掌握</button>
+              <button class="ow-mini" :disabled="busy" :aria-pressed="domainStatusOf(currentDomain) === 'learning'" @click="setDomain(currentDomain, 'learning')">本域需要学习</button>
+            </div></div>
+            <div v-for="group in currentDomain.groups" :key="group.id" class="ow-group">
+              <div class="ow-group-title"><strong>{{ group.title }}</strong><small>{{ group.skill_count }} 个技能点</small></div>
+              <fieldset class="ow-segments"><legend class="ow-sr-only">{{ group.title }}的掌握情况</legend>
+                <label class="ow-mini" :class="{ selected: groupStatus[group.id] === 'mastered' }"><input type="radio" :name="`onboarding-group-${group.id}`" value="mastered" :checked="groupStatus[group.id] === 'mastered'" :disabled="busy" @change="setGroup(group.id, 'mastered')" />已掌握</label>
+                <label class="ow-mini" :class="{ selected: groupStatus[group.id] === 'learning' }"><input type="radio" :name="`onboarding-group-${group.id}`" value="learning" :checked="groupStatus[group.id] === 'learning'" :disabled="busy" @change="setGroup(group.id, 'learning')" />需要学习</label>
+              </fieldset>
             </div>
-          </div>
-          <div v-if="answering" class="bubble-row assistant">
-            <span class="b-av"><img :src="brandLogo" alt="旅鸢" /></span><div class="b-main"><div class="bubble typing">…</div></div>
-          </div>
+            <p class="ow-panel-note"><SIcon name="book" :size="15" />未选择的分组会安排学习；已掌握的内容将计入你的已有基础。</p>
+          </section>
+          <section v-else-if="stage === 'persona' && persona" class="ow-panel" aria-labelledby="ow-persona-title">
+            <div class="ow-meta"><span><SIcon name="sparkle" :size="15" />你的先验学情画像</span></div><h2 id="ow-persona-title" ref="headingRef" tabindex="-1">{{ persona.label }}</h2>
+            <p class="ow-persona-summary">{{ persona.summary }}</p><p class="ow-persona-description">{{ persona.description }}</p>
+            <dl class="ow-persona-stats"><div><dt>已掌握分组</dt><dd>{{ masteredCount }}<small>组</small></dd></div><div><dt>需要学习分组</dt><dd>{{ totalGroups - masteredCount }}<small>组</small></dd></div><div><dt>已有基础技能点</dt><dd>{{ masteredSkills }}<small>个</small></dd></div></dl>
+            <dl class="ow-profile-details"><div v-for="(question, index) in questions" :key="question.id"><dt>{{ questionTopic(question, index) }}</dt><dd>{{ answerLabel(question) }}</dd></div></dl>
+            <p class="ow-panel-note"><SIcon name="map" :size="15" />接下来，旅鸢将根据这份画像为你安排学习顺序。</p>
+          </section>
+          <section v-else-if="stage === 'plan'" class="ow-panel" aria-labelledby="ow-plan-title">
+            <div class="ow-meta"><span>专属学习路径</span><span v-if="plan">第 {{ plan.version }} 版</span></div><h2 id="ow-plan-title" ref="headingRef" tabindex="-1">你的下一段旅程，从这里开始</h2>
+            <div v-if="planning && !plan" class="ow-plan-loading" role="status"><span class="ow-spinner"></span><strong>旅鸢正在安排学习顺序</strong><p>结合你的目标与已有基础，规划 {{ totalGroups }} 个分组。</p></div>
+            <template v-else-if="plan">
+              <p class="ow-help">{{ plan.note || '已结合你的目标与已有基础安排学习顺序。' }}</p><p v-if="plan.fallback" class="ow-fallback">已为你准备基础学习顺序，你可以通过下面的调整意见继续优化。</p>
+              <div class="ow-route-summary"><span>{{ plan.route.stats.groups }} 组完整规划</span><span>{{ plan.route.stats.before_start }} 个技能点计入已有基础</span><span>{{ plan.route.stats.learning_path }} 个技能点进入学习路线</span></div>
+              <ol class="ow-route-list"><li v-for="(id, index) in visibleRoute" :key="id"><span class="ow-route-number">{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ groupTitle(id) }}</strong><small>{{ groupBook(id) }}</small></div><span v-if="groupStatus[id] === 'mastered'" class="ow-mastered-tag">已有基础</span></li></ol>
+              <button v-if="plan.route.group_order.length > 5" class="ow-route-expand" :aria-expanded="routeExpanded" @click="routeExpanded = !routeExpanded">{{ routeExpanded ? '收起完整路线' : `展开完整学习路线（${plan.route.group_order.length} 组）` }}<SIcon :name="routeExpanded ? 'up' : 'down'" :size="14" /></button>
+              <div class="ow-feedback"><label for="ow-feedback">希望调整学习顺序？</label><textarea id="ow-feedback" v-model="feedback" rows="3" :disabled="busy" placeholder="例如：先练习入境接待，再学习行程设计。"></textarea><button class="ow-btn secondary" :disabled="busy || !feedback.trim()" @click="generatePlan(true)">{{ planning ? '正在调整…' : '按反馈调整路线' }}</button></div>
+            </template>
+            <div v-else class="ow-plan-loading"><p>为你规划合适的学习顺序。</p><button class="ow-btn primary" :disabled="busy" @click="generatePlan()">{{ error ? '重新生成学习路径' : '生成学习路径' }}</button></div>
+          </section>
         </div>
       </div>
-
-      <!-- ② 7 域 / 84 组能力自评 -->
-      <div v-else-if="stage === 'groups'" class="ob-body">
-        <p class="ob-intro">管家已记下你的身份。下面按知识域勾选能力现状：<b>已掌握/不需要</b> 自动 100% 点亮并放路线最前；<b>要学</b> 进学习路线。点“展开组”可单组调整；再点一次已选态=取消。</p>
-        <div v-for="dm in domains" :key="dm.id" class="ob-domain">
-          <div class="ob-domain-row">
-            <button class="ob-domain-expand" @click="toggleDomain(dm.id)"><SIcon :name="expanded.has(dm.id) ? 'up' : 'right'" :size="11" /></button>
-            <span class="ob-domain-title">{{ dm.title }}</span>
-            <span class="ob-domain-count">{{ masteredCountOf(dm) }}/{{ dm.groups.length }} 已掌握</span>
-            <span class="ob-domain-seg">
-              <button class="ob-mini" :class="{ on: domainStatusOf(dm) === 'mastered' }" @click="setDomain(dm, 'mastered')">全部已掌握</button>
-              <button class="ob-mini" :class="{ on: domainStatusOf(dm) === 'learning' }" @click="setDomain(dm, 'learning')">全部要学</button>
-            </span>
-          </div>
-          <div v-if="expanded.has(dm.id)" class="ob-domain-groups">
-            <div v-for="g in dm.groups" :key="g.id" class="ob-group">
-              <span class="ob-group-title" :title="g.title">{{ g.title }}</span>
-              <span class="ob-group-meta">{{ g.skill_count }} 点</span>
-              <span class="ob-group-seg">
-                <button class="ob-mini" :class="{ on: groupStatus[g.id] === 'mastered' }" @click="setGroup(g.id, 'mastered')">已掌握</button>
-                <button class="ob-mini" :class="{ on: groupStatus[g.id] === 'learning' }" @click="setGroup(g.id, 'learning')">要学</button>
-              </span>
-            </div>
-          </div>
-        </div>
-        <div class="ob-actions"><button class="ob-btn primary" :disabled="submitting" @click="submit">{{ submitting ? '生成中…' : '生成我的画像' }}</button></div>
-      </div>
-
-      <!-- ③ 画像 + 学习路径 -->
-      <div v-else class="ob-body">
-        <div v-if="persona" class="ob-persona">
-          <div class="ob-persona-head"><SIcon name="sparkle" :size="16" />你的先验画像</div>
-          <div class="ob-persona-label">{{ persona.label }}</div>
-          <div class="ob-persona-summary">{{ persona.summary }}</div>
-          <div class="ob-persona-desc">{{ persona.description }}</div>
-          <div class="ob-persona-stats">
-            <span>已掌握分组 <b>{{ submitCounts?.mastered_group_count ?? 0 }}</b></span>
-            <span>要学分组 <b>{{ submitCounts?.learning_group_count ?? 0 }}</b></span>
-            <span>先验点亮技能点 <b>{{ submitCounts?.mastered_skills ?? 0 }}</b></span>
-          </div>
-        </div>
-
-        <div v-if="plan" class="ob-plan">
-          <div class="ob-plan-head"><SIcon name="map" :size="15" />学习路径规划
-            <span class="ob-plan-tag" :class="{ fb: plan.fallback }">{{ plan.fallback ? '已用默认顺序兜底' : '管家已排好 · 第 ' + plan.version + ' 版' }}</span>
-          </div>
-          <p class="ob-plan-note">{{ plan.note || '已按你的画像生成学习顺序。' }}</p>
-          <div class="ob-plan-stats">
-            <span>84 组全排 <b>✓</b></span>
-            <span>起点前 <b>{{ plan.route.stats.before_start }}</b></span>
-            <span>学习路径 <b>{{ plan.route.stats.learning_path }}</b></span>
-          </div>
-          <div class="ob-plan-list">
-            <div v-for="(gid, i) in plan.route.group_order" :key="gid" class="ob-plan-item"><span class="ob-plan-idx">{{ i + 1 }}</span>{{ groupTitle(gid) }}</div>
-          </div>
-          <div class="ob-replan">
-            <textarea v-model="feedback" rows="2" placeholder="不满意？告诉旅鸢哪里要调整…" />
-            <button class="ob-btn ghost" :disabled="replanning" @click="replan">{{ replanning ? '重新排中…' : '按反馈重排' }}</button>
-          </div>
-        </div>
-        <div v-else-if="planning" class="ob-plan ob-loading"><span class="ma-spin"></span> 旅鸢正在排 84 个分组的学习顺序…</div>
-        <div v-else-if="planError" class="ob-plan ob-error">{{ planError }}</div>
-
-        <div class="ob-actions">
-          <button v-if="!plan && !planning" class="ob-btn ghost" @click="stage = 'groups'">上一步</button>
-          <button v-if="!plan && !planning" class="ob-btn primary" :disabled="!persona" @click="generatePlan">生成学习路径</button>
-          <button v-if="plan && !planning && !replanning" class="ob-btn primary" @click="confirmDone"><SIcon name="check" :size="13" />满意，正式进入</button>
-        </div>
-      </div>
+    </main>
+    <footer class="ow-footer"><div class="ow-footer-inner">
+      <span class="ow-footer-status" aria-live="polite"><span v-if="busy" class="ow-spinner"></span><SIcon v-else name="check" :size="15" />{{ footerStatus }}</span>
+      <div class="ow-footer-actions"><button class="ow-btn secondary" :disabled="busy || !ready || (stage === 'qa' && questionIndex === 0)" @click="previous">{{ stage === 'groups' && domainIndex > 0 ? '上一知识域' : '上一步' }}</button><button class="ow-btn primary" :disabled="!canContinue" @click="next">{{ nextLabel }}<SIcon v-if="!busy" name="right" :size="16" /></button></div>
+    </div></footer>
     </div>
-  </div>
+  </section>
 </template>
+
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import brandLogo from '@/assets/lvyuan-logo.jpg'
-import { computed, nextTick, onMounted, ref } from 'vue'
 import SIcon from '@/components/SIcon.vue'
+import GuofengLandscape from '@/components/GuofengLandscape.vue'
 import { useAppStore } from '@/stores/app'
 import { useOnboardingStore } from '@/stores/onboarding'
-import {
-  answerQa, fetchOnboardingGroups, getQaState, planLearningPath, submitOnboarding,
-} from '@/api/onboarding'
-import type { OnbDomain, OnbOption, OnbPersona, PlanResult, QaQuestion } from '@/api/onboarding'
+import { answerQa, fetchOnboardingGroups, fetchOnboardingQuestions, getLatestLearningPath, getQaState, planLearningPath, submitOnboarding } from '@/api/onboarding'
+import type { OnbDomain, OnbPersona, OnbQuestion, PlanResult, QaState } from '@/api/onboarding'
+import { clearOnboardingDraft, readOnboardingDraft, saveOnboardingDraft } from '@/utils/onboardingDraft'
+import type { OnboardingStage } from '@/utils/onboardingDraft'
 
-const emit = defineEmits<{ (e: 'done'): void }>()
+const emit = defineEmits<{ (e: 'done'): void; (e: 'cancel'): void }>()
 const store = useAppStore()
 const onb = useOnboardingStore()
-
-type Stage = 'qa' | 'groups' | 'persona'
-const stage = ref<Stage>('qa')
-const bubbles = ref<Array<{ role: 'assistant' | 'user'; text: string; qa?: QaQuestion | null }>>([])
+const userId = store.userId
+let disposed = false
+const flow: Array<{ id: OnboardingStage; title: string; note: string }> = [
+  { id: 'qa', title: '身份与目标', note: '认识你的起点' },
+  { id: 'groups', title: '能力自评', note: '确认已有基础' },
+  { id: 'persona', title: '学情画像', note: '梳理学习需求' },
+  { id: 'plan', title: '学习路径', note: '确认专属路线' },
+]
+const stage = ref<OnboardingStage>('qa')
+const loading = ref(true)
+const ready = ref(false)
 const answering = ref(false)
-const qaScroll = ref<HTMLElement | null>(null)
-
-const domains = ref<OnbDomain[]>([])
-const groupStatus = ref<Record<string, string>>({})
-const expanded = ref<Set<string>>(new Set())
 const submitting = ref(false)
-const persona = ref<OnbPersona | null>(null)
-const submitCounts = ref<any>(null)
 const planning = ref(false)
-const replanning = ref(false)
-const plan = ref<PlanResult | null>(null)
-const planError = ref('')
+const error = ref('')
+const questions = ref<OnbQuestion[]>([])
+const qaState = ref<QaState | null>(null)
+const questionIndex = ref(0)
+const answers = ref<Record<string, string>>({})
+const domains = ref<OnbDomain[]>([])
+const domainIndex = ref(0)
+const groupStatus = ref<Record<string, string>>({})
+const persona = ref<OnbPersona | null>(null)
+const plan = ref<(Pick<PlanResult, 'version' | 'note' | 'route'> & { fallback?: boolean }) | null>(null)
 const feedback = ref('')
-
-const stepLabel = computed(() =>
-  stage.value === 'qa' ? '管家对话 · 身份问答' : stage.value === 'groups' ? '能力自评 · 7 域 / 84 组' : '画像与学习路径',
-)
-const groupTitleMap = computed(() => {
-  const m: Record<string, string> = {}
-  for (const d of domains.value) for (const g of d.groups) m[g.id] = g.title
-  return m
+const routeExpanded = ref(false)
+const visibleRoute = computed(() => routeExpanded.value ? plan.value?.route.group_order || [] : plan.value?.route.group_order.slice(0, 5) || [])
+const mainRef = ref<HTMLElement | null>(null)
+const headingRef = ref<HTMLElement | null>(null)
+const busy = computed(() => loading.value || answering.value || submitting.value || planning.value)
+const currentQuestion = computed(() => questions.value[questionIndex.value])
+const currentDomain = computed(() => domains.value[domainIndex.value])
+const serverStep = computed(() => Math.min(qaState.value?.step || 0, questions.value.length))
+const identityDone = computed(() => !!qaState.value?.identity_done)
+const stageIndex = computed(() => flow.findIndex((item) => item.id === stage.value))
+const reachableStage = computed(() => persona.value ? (plan.value ? 3 : 2) : identityDone.value ? 1 : 0)
+const allGroups = computed(() => domains.value.flatMap((domain) => domain.groups))
+const totalGroups = computed(() => allGroups.value.length)
+const masteredCount = computed(() => allGroups.value.filter((group) => groupStatus.value[group.id] === 'mastered').length)
+const masteredSkills = computed(() => allGroups.value.reduce((sum, group) => sum + (groupStatus.value[group.id] === 'mastered' ? group.skill_count : 0), 0))
+const groupMap = computed(() => new Map(allGroups.value.map((group) => [group.id, group])))
+const sidebarCopy = computed(() => ({
+  qa: { eyebrow: '认识你的起点', title: '从了解你开始', description: `${questions.value.length} 个问题，帮助旅鸢了解你的经验、目标与学习偏好。` },
+  groups: { eyebrow: '确认已有基础', title: '让学习更适合你', description: `${domains.value.length} 个知识域，${totalGroups.value} 个分组。按你的实际情况选择，支持整域批量调整。` },
+  persona: { eyebrow: '你的学习起点', title: '更清晰地认识自己', description: '结合经验、目标与能力自评，梳理你的已有基础和学习需求。' },
+  plan: { eyebrow: '开启学习旅程', title: '找到你的下一步', description: '查看完整学习顺序，也可以告诉旅鸢你希望怎样调整。' },
+}[stage.value]))
+const footerStatus = computed(() => {
+  if (loading.value) return '正在加载测试内容'
+  if (answering.value) return '正在保存回答'
+  if (submitting.value) return '正在生成学情画像'
+  if (planning.value) return '正在规划学习路径'
+  if (!ready.value) return '重新加载后继续'
+  if (stage.value === 'qa') return `单选 · 第 ${questionIndex.value + 1} / ${questions.value.length} 题 · 可返回修改`
+  if (stage.value === 'groups') return `已选择 ${allGroups.value.filter((group) => !!groupStatus.value[group.id]).length} / ${totalGroups.value} 组`
+  if (stage.value === 'persona') return '确认你的学习起点，继续生成专属路线'
+  return plan.value ? '确认路线后，即可进入首页开始学习' : '生成学习路径后继续'
 })
-function groupTitle(id: string): string { return groupTitleMap.value[id] || id }
-
-function push(role: 'assistant' | 'user', text: string, qa?: QaQuestion | null) {
-  bubbles.value.push({ role, text, qa })
-  nextTick(() => { const el = qaScroll.value; if (el) el.scrollTop = el.scrollHeight })
-}
-
-async function scrollBottom() {
-  await nextTick()
-  const el = qaScroll.value
-  if (el) el.scrollTop = el.scrollHeight
-}
-
-onMounted(async () => {
-  try {
-    const g = await fetchOnboardingGroups()
-    domains.value = g.domains
-    const init: Record<string, string> = {}
-    for (const d of g.domains) for (const grp of d.groups) init[grp.id] = ''
-    groupStatus.value = init
-  } catch { /* ignore */ }
-  // 管家开始身份对话
-  try {
-    const st = await getQaState(store.userId)
-    if (st.identity_done) {
-      push('assistant', '你的身份题已经答完啦。接下来做能力自评，确认每个知识域的掌握情况。')
-      stage.value = 'groups'
-      return
-    }
-    push('assistant', '你好，我是旅鸢。为了给你定制入境游向导的学习路线，先回答 6 个关于你的小问题（点选项即可）。')
-    if (st.question) push('assistant', `第 ${st.step + 1}/${st.total} 题`, st.question)
-  } catch {
-    push('assistant', '先验画像服务暂时不可用，请刷新重试。')
-  }
+const nextLabel = computed(() => {
+  if (answering.value) return '保存中…'
+  if (submitting.value) return '生成中…'
+  if (planning.value) return '规划中…'
+  if (stage.value === 'qa') return questionIndex.value === questions.value.length - 1 ? '进入能力自评' : '下一题'
+  if (stage.value === 'groups') return domainIndex.value === domains.value.length - 1 ? '生成学情画像' : '下一知识域'
+  if (stage.value === 'persona') return '生成学习路径'
+  return plan.value ? '确认并进入首页' : '生成学习路径'
 })
+const canContinue = computed(() => {
+  if (busy.value || !ready.value) return false
+  if (stage.value === 'qa') return !!currentQuestion.value && !!answers.value[currentQuestion.value.id]
+  if (stage.value === 'groups') return !!currentDomain.value && questions.value.every((question) => !!answers.value[question.id])
+  return !!persona.value
+})
+const topicNames: Record<string, string> = { identity: '职业身份', basis: '接待经验', language: '外语水平', goal: '学习方向', pace: '学习节奏', style: '训练偏好' }
+function questionTopic(question: OnbQuestion, index: number) { return topicNames[question.id] || `问题 ${index + 1}` }
+function answerLabel(question: OnbQuestion) { return question.options.find((option) => option.id === answers.value[question.id])?.label || '尚未选择' }
+function groupTitle(id: string) { return groupMap.value.get(id)?.title || plan.value?.route.groups?.find((group) => group.id === id)?.title || id }
+function groupBook(id: string) { return groupMap.value.get(id)?.book_title || '' }
+function chosenCountOf(domain: OnbDomain) { return domain.groups.filter((group) => !!groupStatus.value[group.id]).length }
+function domainStatusOf(domain: OnbDomain) {
+  const statuses = domain.groups.map((group) => groupStatus.value[group.id])
+  return statuses.length && statuses.every((value) => value === 'mastered') ? 'mastered' : statuses.length && statuses.every((value) => value === 'learning') ? 'learning' : ''
+}
+function saveDraft() {
+  if (!disposed) saveOnboardingDraft(userId, { stage: stage.value, answers: answers.value, groupStatus: groupStatus.value, questionIndex: questionIndex.value, domainId: currentDomain.value?.id || '' })
+}
+async function focusContent() { await nextTick(); if (disposed) return; mainRef.value?.scrollTo({ top: 0 }); headingRef.value?.focus({ preventScroll: true }) }
+function errorMessage(cause: unknown, fallback: string) { const detail = (cause as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail; return typeof detail === 'string' ? detail : fallback }
 
-async function choose(q: QaQuestion, opt: OnbOption) {
-  if (answering.value) return
-  answering.value = true
-  // 当前题目卡就地收起：转为用户气泡 + 管家推进
-  bubbles.value = bubbles.value.map((b) => (b.qa && b.qa.id === q.id ? { role: b.role, text: b.text } : b))
-  push('user', `我选 · ${opt.label}`)
+async function initialize() {
+  loading.value = true; ready.value = false; error.value = ''
   try {
-    const st = await answerQa({ user_id: store.userId, question_id: q.id, option_id: opt.id })
-    if (st.identity_done || !st.pending) {
-      push('assistant', st.lead || '身份题已答完，接下来做能力自评。')
-      stage.value = 'groups'
-    } else {
-      push('assistant', st.lead || '收到，我们继续。')
-      if (st.question) push('assistant', `第 ${st.step + 1}/${st.total} 题`, st.question)
+    const [questionList, groupData, state] = await Promise.all([fetchOnboardingQuestions(), fetchOnboardingGroups(), getQaState(userId)])
+    if (disposed) return
+    if (!questionList.length || !groupData.domains.length || !groupData.domains.some((domain) => domain.groups.length)) throw new Error('empty onboarding data')
+    questions.value = questionList; domains.value = groupData.domains; qaState.value = state; onb.identityDone = !!state.identity_done
+    let draft = readOnboardingDraft(userId)
+    // 学习数据重置后，抛弃与服务端进度不一致的旧草稿。
+    if (draft && draft.stage !== 'qa' && !state.step && !onb.persona) { clearOnboardingDraft(userId); draft = null }
+    const mergedAnswers = { ...state.answers, ...draft?.answers }
+    answers.value = Object.fromEntries(questionList.flatMap((question) => question.options.some((option) => option.id === mergedAnswers[question.id]) ? [[question.id, mergedAnswers[question.id]]] : []))
+    const savedGroups = draft?.groupStatus || onb.groupStatus || {}
+    groupStatus.value = Object.fromEntries(allGroups.value.map((group) => [group.id, ['mastered', 'learning'].includes(savedGroups[group.id]) ? savedGroups[group.id] : '']))
+    questionIndex.value = Math.min(draft?.questionIndex ?? state.step, state.step, questionList.length - 1)
+    domainIndex.value = Math.max(0, domains.value.findIndex((domain) => domain.id === draft?.domainId))
+    persona.value = draft && ['persona', 'plan'].includes(draft.stage) ? onb.persona : null
+    plan.value = null
+    stage.value = persona.value ? draft!.stage : state.identity_done && draft?.stage !== 'qa' ? 'groups' : 'qa'
+    if (stage.value === 'plan') {
+      try { const latest = await getLatestLearningPath(userId); if (latest.found && latest.route) plan.value = { version: latest.version || 1, route: latest.route, note: latest.route.note } }
+      catch { error.value = '暂时无法恢复学习路线，请重试生成。' }
     }
-  } catch (e: any) {
-    push('assistant', '刚才没保存上，请再点一次选项。')
-  } finally {
-    answering.value = false
-    await scrollBottom()
-  }
+    ready.value = true; saveDraft()
+  } catch (cause) { error.value = errorMessage(cause, '暂时无法连接学情测试服务，请稍后重试。') }
+  finally { loading.value = false; void focusContent() }
 }
-
-function toggleDomain(id: string) {
-  const next = new Set(expanded.value)
-  if (next.has(id)) next.delete(id); else next.add(id)
-  expanded.value = next
+function invalidateResults() { persona.value = null; plan.value = null; error.value = '' }
+function selectAnswer(optionId: string) {
+  if (busy.value || !currentQuestion.value || answers.value[currentQuestion.value.id] === optionId) return
+  answers.value = { ...answers.value, [currentQuestion.value.id]: optionId }; invalidateResults(); saveDraft()
 }
-function masteredCountOf(dm: OnbDomain): number { return dm.groups.filter((g) => groupStatus.value[g.id] === 'mastered').length }
-function domainStatusOf(dm: OnbDomain): string {
-  const st = dm.groups.map((g) => groupStatus.value[g.id] || '')
-  if (st.length && st.every((x) => x === 'mastered')) return 'mastered'
-  if (st.length && st.every((x) => x === 'learning')) return 'learning'
-  return ''
+function reviewQuestion(index: number) { if (busy.value || index > serverStep.value) return; questionIndex.value = Math.min(index, questions.value.length - 1); error.value = ''; saveDraft(); void focusContent() }
+function goStage(target: OnboardingStage) { if (busy.value || flow.findIndex((item) => item.id === target) > reachableStage.value) return; stage.value = target; error.value = ''; saveDraft(); void focusContent() }
+function selectDomain(index: number) { domainIndex.value = index; error.value = ''; saveDraft(); void focusContent() }
+function setDomain(domain: OnbDomain, status: string) { if (busy.value) return; for (const group of domain.groups) groupStatus.value[group.id] = status; invalidateResults(); saveDraft() }
+function setGroup(id: string, status: string) { if (busy.value) return; groupStatus.value = { ...groupStatus.value, [id]: status }; invalidateResults(); saveDraft() }
+function previous() {
+  if (busy.value) return
+  error.value = ''
+  if (stage.value === 'qa') questionIndex.value = Math.max(0, questionIndex.value - 1)
+  else if (stage.value === 'groups' && domainIndex.value > 0) domainIndex.value--
+  else if (stage.value === 'groups') { stage.value = 'qa'; questionIndex.value = questions.value.length - 1 }
+  else if (stage.value === 'persona') stage.value = 'groups'
+  else stage.value = 'persona'
+  saveDraft(); void focusContent()
 }
-function setDomain(dm: OnbDomain, st: string) {
-  const cur = domainStatusOf(dm)
-  const setTo = cur === st ? '' : st
-  const next = { ...groupStatus.value }
-  for (const g of dm.groups) next[g.id] = setTo
-  groupStatus.value = next
+async function nextIdentity() {
+  const question = currentQuestion.value
+  if (!question || !answers.value[question.id]) return
+  answering.value = true; error.value = ''
+  try {
+    // 旧题可回看并修改；最终 submit 携带整套答案。新题通过原有顺序接口保存。
+    if (questionIndex.value >= serverStep.value && !identityDone.value) { const state = await answerQa({ user_id: userId, question_id: question.id, option_id: answers.value[question.id] }); qaState.value = state; onb.identityDone = !!state.identity_done }
+    if (questionIndex.value < questions.value.length - 1) questionIndex.value++; else stage.value = 'groups'
+    saveDraft(); void focusContent()
+  } catch (cause) {
+    error.value = errorMessage(cause, '回答暂时未保存，请保留当前选择并重试。')
+    if ((cause as { response?: { status?: number } })?.response?.status === 409) {
+      try {
+        const state = await getQaState(userId)
+        qaState.value = state
+        onb.identityDone = !!state.identity_done
+        answers.value = { ...state.answers, ...answers.value }
+        questionIndex.value = Math.min(serverStep.value, questions.value.length - 1)
+        saveDraft(); void focusContent()
+      } catch { /* 保留选择供重试 */ }
+    }
+  } finally { answering.value = false }
 }
-function setGroup(id: string, st: string) {
-  const cur = groupStatus.value[id]
-  groupStatus.value = { ...groupStatus.value, [id]: cur === st ? '' : st }
-}
-
 async function submit() {
-  submitting.value = true
-  planError.value = ''
+  if (!totalGroups.value || !questions.value.every((question) => answers.value[question.id])) return
+  submitting.value = true; error.value = ''; saveDraft()
   try {
-    const resolved: Record<string, string> = {}
-    for (const d of domains.value) for (const g of d.groups) {
-      resolved[g.id] = groupStatus.value[g.id] === 'mastered' ? 'mastered' : 'learning'
-    }
-    const r = await submitOnboarding({ user_id: store.userId, answers: {}, group_status: resolved })
-    persona.value = r.persona
-    submitCounts.value = r.counts
-    stage.value = 'persona'
-  } catch (e: any) {
-    planError.value = e?.response?.data?.detail || e?.message || '提交失败，请重试'
-  } finally {
-    submitting.value = false
-  }
+    const resolved = Object.fromEntries(allGroups.value.map((group) => [group.id, groupStatus.value[group.id] === 'mastered' ? 'mastered' : 'learning']))
+    const result = await submitOnboarding({ user_id: userId, answers: answers.value, group_status: resolved })
+    if (!result.ok || !result.persona) throw new Error('invalid profile response')
+    groupStatus.value = result.group_status || resolved; persona.value = result.persona; onb.persona = result.persona; onb.groupStatus = groupStatus.value; plan.value = null; stage.value = 'persona'; saveDraft(); void focusContent()
+  } catch (cause) { error.value = errorMessage(cause, '画像暂时未生成，你的选择已保留，请重试。') }
+  finally { submitting.value = false }
 }
-
-async function generatePlan() {
-  planning.value = true
-  planError.value = ''
-  plan.value = null
-  try { plan.value = await planLearningPath(store.userId) }
-  catch (e: any) { planError.value = e?.response?.data?.detail || e?.message || '生成失败，请稍后重试' }
+async function generatePlan(withFeedback = false) {
+  if (busy.value || !persona.value) return
+  stage.value = 'plan'; planning.value = true; routeExpanded.value = false; error.value = ''; saveDraft(); void focusContent()
+  try { const result = await planLearningPath(userId, withFeedback ? feedback.value.trim() : ''); if (!result.ok || !result.route?.group_order?.length) throw new Error('invalid learning path response'); plan.value = result; saveDraft() }
+  catch (cause) { error.value = errorMessage(cause, '学习路径暂时未生成，请稍后重试。') }
   finally { planning.value = false }
 }
-
-async function replan() {
-  replanning.value = true
-  planError.value = ''
-  try { plan.value = await planLearningPath(store.userId, feedback.value) }
-  catch (e: any) { planError.value = e?.response?.data?.detail || e?.message || '重排失败，请稍后重试' }
-  finally { replanning.value = false }
+function confirmDone() { if (busy.value || !persona.value || !plan.value) return; clearOnboardingDraft(userId); onb.markDone(persona.value, groupStatus.value); emit('done') }
+async function next() {
+  if (!canContinue.value) return
+  if (stage.value === 'qa') await nextIdentity()
+  else if (stage.value === 'groups') { if (domainIndex.value < domains.value.length - 1) selectDomain(domainIndex.value + 1); else await submit() }
+  else if (stage.value === 'persona' || !plan.value) await generatePlan()
+  else confirmDone()
 }
-
-function confirmDone() {
-  onb.markDone(persona.value, groupStatus.value)
-  emit('done')
-}
+onMounted(initialize)
+onBeforeUnmount(() => { disposed = true })
 </script>
+
+<style lang="scss">
+@use '@/styles/tokens' as *;
+.onboarding-dialog.ow-screen { width: 100%; display: flex; flex-direction: column; height: 100dvh; margin: 0; padding: 0; background: $color-bg;
+  .ow-screen-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; color: $color-text; }
+}
+</style>
 <style lang="scss" scoped>
 @use '@/styles/tokens' as *;
-
-.onb-wrap { display: flex; justify-content: center; }
-.onb-card { width: 100%; max-width: 760px; border-radius: 16px; overflow: hidden; background: #fff; border: 1px solid $color-border; box-shadow: $shadow-card-hover; }
-.onb-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: linear-gradient(120deg, $color-primary, $color-primary-light);
-  .onb-title { display: inline-flex; align-items: center; gap: 7px; color: #fff; font-size: 15px; font-weight: 700; letter-spacing: 1px; .ob-dot { width: 9px; height: 9px; border-radius: 50%; background: $color-accent; animation: obPing 1.6s ease-out infinite; } }
-  .onb-step { margin-left: auto; color: rgba(255,255,255,.85); font-size: 12px; } }
-.ob-body { padding: 16px 20px 20px; max-height: 66vh; overflow-y: auto; }
-.ob-intro { color: $color-text-secondary; font-size: 13px; line-height: 1.8; margin: 0 0 12px; }
-
-.ob-chat { display: flex; flex-direction: column; gap: 12px; max-height: 52vh; overflow-y: auto; padding: 4px 2px; }
-.bubble-row { display: flex; gap: 8px; align-items: flex-start;
-  &.user { flex-direction: row-reverse; }
-  .b-av { width: 30px; height: 30px; border-radius: 50%; background: $color-primary; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
-  .b-main { max-width: 86%; display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
-    .bubble { padding: 9px 13px; border-radius: 12px; font-size: 13.5px; line-height: 1.75; color: $color-text; background: #fff; border: 1px solid $color-border; } }
-  &.user .b-main { align-items: flex-end; }
-  &.user .bubble { background: $color-primary; color: #fff; border: none; border-bottom-right-radius: 3px; } }
-.qa-card { width: 100%; max-width: 560px; border: 1px solid $color-border; border-radius: 12px; background: #F8FBFF; padding: 12px 14px;
-  .qa-q { font-size: 14px; font-weight: 700; color: $color-text; margin-bottom: 10px; }
-  .qa-opts { display: flex; flex-direction: column; gap: 7px; }
-  .qa-opt { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid $color-border; border-radius: 9px; background: #fff; font-size: 13px; color: $color-text; cursor: pointer; text-align: left; transition: all .15s;
-    i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid $color-border-d10; background: #fff; flex-shrink: 0; }
-    &:hover { border-color: $color-primary; i { background: $color-accent; border-color: $color-accent; } }
-    &:disabled { opacity: .6; cursor: not-allowed; } } }
-
-.ob-domain { border: 1px solid $color-border; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
-.ob-domain-row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: $color-secondary-bg; }
-.ob-domain-expand { border: none; background: none; cursor: pointer; color: $color-text-secondary; display: inline-flex; }
-.ob-domain-title { font-size: 13.5px; font-weight: 700; color: $color-text; }
-.ob-domain-count { font-size: 11.5px; color: $color-text-secondary; }
-.ob-domain-seg, .ob-group-seg { margin-left: auto; display: inline-flex; gap: 5px; }
-.ob-mini { border: 1px solid $color-border; background: #fff; color: $color-text-secondary; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
-  &.on { background: $color-primary; border-color: $color-primary; color: #fff; } }
-.ob-domain-groups { padding: 6px 12px 8px 34px; display: flex; flex-direction: column; gap: 4px; }
-.ob-group { display: flex; align-items: center; gap: 8px; padding: 5px 4px; }
-.ob-group-title { font-size: 12.5px; color: $color-text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52%; }
-.ob-group-meta { font-size: 11px; color: $color-text-secondary; flex-shrink: 0; }
-.ob-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
-.ob-btn { border: none; border-radius: 999px; padding: 8px 18px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-  &.primary { background: $color-primary; color: #fff; &:disabled { opacity: .5; cursor: not-allowed; } }
-  &.ghost { background: $color-secondary-bg; color: $color-primary; border: 1px solid $color-border; } }
-
-.ob-persona { border: 1px solid $color-border; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
-.ob-persona-head { display: inline-flex; align-items: center; gap: 6px; color: $color-primary; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
-.ob-persona-label { font-size: 18px; font-weight: 800; color: $color-text; margin: 6px 0 2px; }
-.ob-persona-summary { font-size: 13px; color: $color-accent-d15; font-weight: 600; margin-bottom: 6px; }
-.ob-persona-desc { font-size: 12.5px; color: $color-text-secondary; line-height: 1.8; }
-.ob-persona-stats { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; font-size: 12px; color: $color-text-secondary;
-  b { color: $color-primary; font-size: 15px; margin-left: 4px; } }
-
-.ob-plan { border: 1px dashed $color-border-d10; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
-.ob-plan-head { display: flex; align-items: center; gap: 7px; font-weight: 700; color: $color-text; font-size: 13px; }
-.ob-plan-tag { margin-left: auto; font-size: 11px; font-weight: 500; color: #fff; background: $color-primary; padding: 2px 9px; border-radius: 999px; &.fb { background: #b8953a; } }
-.ob-plan-note { font-size: 12.5px; color: $color-text-secondary; line-height: 1.7; margin: 8px 0; }
-.ob-plan-stats { display: flex; gap: 16px; font-size: 12px; color: $color-text-secondary; margin-bottom: 8px; b { color: $color-primary; } }
-.ob-plan-list { display: flex; flex-direction: column; gap: 3px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
-.ob-plan-item { font-size: 12.5px; color: $color-text; display: flex; gap: 8px; }
-.ob-plan-idx { width: 16px; height: 16px; border-radius: 50%; background: $color-accent; color: #fff; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.ob-loading { display: flex; align-items: center; gap: 8px; color: $color-text-secondary; }
-.ob-error { color: #c0504d; }
-.ob-replan { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; textarea { width: 100%; border: 1px solid $color-border; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; resize: vertical; } }
-.ma-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(51,143,242,.3); border-top-color: $color-accent; animation: obSpin .7s linear infinite; display: inline-block; }
-@keyframes obSpin { to { transform: rotate(360deg); } }
-@keyframes obPing { 0% { box-shadow: 0 0 0 0 rgba(51,143,242,.45); } 70% { box-shadow: 0 0 0 6px rgba(51,143,242,0); } 100% { box-shadow: 0 0 0 0 rgba(51,143,242,0); } }
+.ow-header { min-height: 88px; padding: 20px clamp(20px, 4vw, 64px); display: flex; align-items: center; gap: 20px; background: $color-surface; border-bottom: 1px solid $color-border; h1 { font-size: 18px; font-weight: 500; margin: 0; } }
+.ow-brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; img { width: 40px; height: 40px; object-fit: contain; } span { font: 600 23px/1.2 $font-serif; letter-spacing: 4px; } }
+.ow-header-divider { width: 1px; height: 23px; background: $color-border; }
+.ow-header-note { margin-left: auto; font-size: 14px; color: $color-text-secondary; }
+.ow-return { padding: 8px 0 8px 12px; background: transparent; border: 0; color: $color-text-secondary; font: inherit; font-size: 14px; cursor: pointer; &:hover { color: $color-primary; } }
+.ow-flow { flex-shrink: 0; background: $color-surface; padding: 28px 40px;
+  ol { max-width: 1050px; margin: auto; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  li { position: relative; &:not(:last-child)::after { content: ''; position: absolute; left: 180px; right: 28px; top: 20px; height: 1px; background: $color-border; } }
+  button { position: relative; z-index: 1; border: 0; background: $color-surface; display: flex; align-items: center; gap: 13px; text-align: left; font: inherit; color: $color-text-secondary; padding: 2px 12px 2px 0; cursor: pointer; }
+  button:disabled { cursor: default; opacity: 1; } strong { display: block; font-weight: 500; font-size: 17px; white-space: nowrap; } small { display: block; font-size: 13px; margin-top: 4px; }
+  .current { strong { color: $color-text; } .ow-node { color: #fff; background: $color-primary; border-color: $color-primary; box-shadow: 0 0 0 5px $color-secondary-bg; } }
+  .done .ow-node { color: $color-primary; background: $color-secondary-bg; border-color: $color-border; }
+}
+.ow-node { width: 36px; height: 36px; flex-shrink: 0; border: 1px solid $color-border; border-radius: 50%; display: grid; place-items: center; font-size: 14px; }
+.ow-main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 40px clamp(20px, 4vw, 64px); }
+.ow-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; align-items: start; max-width: 1080px; margin: auto; }
+.ow-sidebar { position: sticky; top: 0; padding: 6px 0 0; h2 { font-size: 25px; font-weight: 500; margin: 9px 0 13px; line-height: 1.45; letter-spacing: .6px; } }
+.ow-eyebrow { color: $color-primary-dark; font-size: 11px; letter-spacing: 2px; }
+.ow-sidebar-description { color: $color-text-secondary; font-size: 12px; line-height: 1.9; margin-bottom: 24px; }
+.ow-directory { display: flex; flex-direction: column; gap: 5px;
+  button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 10px; border: 0; border-radius: 9px; background: transparent; font: inherit; color: $color-text-secondary; font-size: 13px; text-align: left; cursor: pointer; }
+  button.active { background: $color-secondary-bg; color: $color-primary-dark; } button:disabled { cursor: default; opacity: .65; }
+  small, svg { margin-left: auto; flex-shrink: 0; font-size: 11px; } button.answered .ow-directory-dot { background: $color-primary-light; }
+}
+.ow-directory-dot { width: 6px; height: 6px; border-radius: 50%; background: $color-border-d10; flex-shrink: 0; .active & { background: $color-primary; } }
+.ow-sidebar-art { margin-top: 26px; overflow: hidden; img { width: 100%; opacity: .65; } span { display: block; margin-top: 13px; text-align: center; font-family: $font-serif; font-size: 11px; color: $color-text-secondary; letter-spacing: 1px; } }
+.ow-content { min-width: 0; }
+.ow-panel { position: relative; padding: 32px 36px; background: $color-surface; border: 1px solid $color-border; border-radius: 16px 5px 16px 5px; box-shadow: 0 8px 32px rgba(55, 117, 176, .045);
+  &::before, &::after { content: ''; position: absolute; width: 13px; height: 13px; pointer-events: none; opacity: .6; } &::before { top: 10px; left: 10px; border-top: 1px solid $color-border-d10; border-left: 1px solid $color-border-d10; } &::after { bottom: 10px; right: 10px; border-bottom: 1px solid $color-border-d10; border-right: 1px solid $color-border-d10; }
+  h2 { font-size: 24px; line-height: 1.65; font-weight: 500; margin: 17px 0 6px; overflow-wrap: anywhere; &:focus { outline: none; } }
+}
+.ow-meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 14px; color: $color-text-secondary; > span:first-child { display: inline-flex; align-items: center; gap: 7px; color: $color-primary-dark; } }
+.ow-question-progress { margin-left: auto; display: flex; gap: 4px; i { width: 19px; height: 3px; border-radius: 3px; background: $color-secondary-bg; &.filled { background: $color-primary; } } }
+.ow-help { color: $color-text-secondary; font-size: 15px; line-height: 1.8; margin-bottom: 24px; }
+.ow-options, .ow-segments { border: 0; padding: 0; margin: 0; min-width: 0; }
+.ow-options { display: flex; flex-direction: column; gap: 10px; }
+.ow-option { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 16px 18px; border: 1px solid $color-border; border-radius: 10px; cursor: pointer; transition: background .15s, border-color .15s;
+  &:hover, &.selected { border-color: $color-primary; background: $color-bg; } &.disabled { cursor: default; opacity: .65; } &:has(input:focus-visible) { outline: 2px solid $color-primary; outline-offset: 3px; } input { accent-color: $color-primary; width: 16px; height: 16px; flex-shrink: 0; cursor: inherit; }
+}
+.ow-option-letter { font-size: 14px; color: $color-text-secondary; }
+.ow-option-text { flex: 1; font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; }
+.ow-panel-note { display: flex; align-items: flex-start; gap: 8px; color: $color-text-secondary; font-size: 14px; line-height: 1.8; margin-top: 24px; svg { flex-shrink: 0; margin-top: 3px; } }
+.ow-domain-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 20px; border-bottom: 1px solid $color-border; > span { font-size: 14px; color: $color-text-secondary; } }
+.ow-segments { display: flex; gap: 7px; flex-shrink: 0; flex-wrap: wrap; }
+.ow-mini { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 6px 10px; background: $color-surface; border: 1px solid $color-border; border-radius: 6px; color: $color-text-secondary; font: inherit; font-size: 14px; cursor: pointer;
+  &[aria-pressed='true'], &.selected { color: $color-primary-dark; background: $color-secondary-bg; border-color: $color-primary; } input { accent-color: $color-primary; width: 13px; height: 13px; } &:has(input:focus-visible) { outline: 2px solid $color-primary; outline-offset: 2px; }
+}
+.ow-group { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 20px 0; border-bottom: 1px solid $color-border; }
+.ow-group-title { min-width: 0; strong { display: block; font-weight: 400; font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; } small { display: block; font-size: 13px; color: $color-text-secondary; margin-top: 4px; } }
+.ow-summary { display: flex; flex-direction: column; gap: 10px; font-size: 12px; span { color: $color-text-secondary; } strong { font-weight: 500; margin-bottom: 15px; line-height: 1.8; } }
+.ow-persona-summary { font-size: 15px; line-height: 1.9; color: $color-primary-dark; margin: 15px 0; }
+.ow-persona-description { font-size: 16px; line-height: 1.9; color: $color-text-secondary; }
+.ow-persona-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 25px 0; margin: 20px 0 8px; border-top: 1px solid $color-border; border-bottom: 1px solid $color-border;
+  dt { font-size: 14px; color: $color-text-secondary; } dd { margin: 8px 0 0; color: $color-primary-dark; font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; } small { font-size: 13px; color: $color-text-secondary; margin-left: 7px; font-weight: 400; }
+}
+.ow-profile-details { > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 14px; border-bottom: 1px solid $color-border; padding: 16px 0; font-size: 15px; line-height: 1.8; } dt { color: $color-text-secondary; } dd { margin: 0; } }
+.ow-route-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 22px 0 14px; color: $color-primary-dark; font-size: 14px; }
+.ow-route-list { padding: 0; margin: 0; list-style: none; li { display: flex; align-items: center; gap: 15px; padding: 16px 0; border-bottom: 1px solid $color-border; } strong { display: block; font-size: 17px; font-weight: 400; line-height: 1.7; } small { display: block; font-size: 13px; color: $color-text-secondary; margin-top: 3px; } }
+.ow-route-number { width: 34px; height: 34px; border-radius: 50%; background: $color-secondary-bg; color: $color-primary-dark; display: grid; place-items: center; font-size: 14px; flex-shrink: 0; }
+.ow-route-expand { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 6px 0; border: 0; background: transparent; color: $color-primary-dark; font: inherit; font-size: 14px; cursor: pointer; }
+.ow-mastered-tag { margin-left: auto; color: $color-text-secondary; font-size: 13px; white-space: nowrap; }
+.ow-feedback { margin-top: 28px; display: flex; align-items: flex-start; flex-direction: column; gap: 12px; label { font-size: 15px; } textarea { width: 100%; min-height: 82px; padding: 12px 14px; border: 1px solid $color-border; border-radius: 8px; resize: vertical; font: inherit; font-size: 16px; line-height: 1.8; background: $color-bg; color: $color-text; } }
+.ow-fallback { padding: 12px 14px; background: $color-secondary-bg; color: $color-text-secondary; font-size: 14px; line-height: 1.8; border-radius: 6px; }
+.ow-footer { background: $color-surface; border-top: 1px solid $color-border; flex-shrink: 0; padding: 20px clamp(20px, 4vw, 64px); }
+.ow-footer-inner { max-width: 1080px; margin: auto; display: flex; align-items: center; gap: 20px; justify-content: space-between; }
+.ow-footer-status { display: flex; align-items: center; gap: 8px; color: $color-text-secondary; font-size: 12px; line-height: 1.8; }
+.ow-footer-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.ow-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 42px; padding: 10px 22px; border-radius: 8px; border: 1px solid $color-border; font: inherit; font-size: 15px; cursor: pointer; background: $color-surface; color: $color-text;
+  &.primary { background: $color-primary; border-color: $color-primary; color: #fff; &:hover { background: $color-primary-dark; } } &.secondary:hover { background: $color-secondary-bg; }
+}
+button:disabled, .ow-btn:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, textarea:focus-visible { outline: 2px solid $color-primary; outline-offset: 3px; }
+.ow-error { padding: 14px 18px; display: flex; align-items: flex-start; gap: 10px; border: 1px solid #efd4d3; border-radius: 8px; background: #fff6f5; color: #a34845; font-size: 15px; line-height: 1.8; margin-bottom: 16px; svg { flex-shrink: 0; margin-top: 4px; } }
+.ow-empty { min-height: 240px; max-width: 640px; margin: 40px auto; text-align: center; color: $color-text-secondary; h2 { color: $color-text; font-size: 22px; font-weight: 500; margin: 16px 0; } p { font-size: 14px; line-height: 1.8; margin: 16px 0 24px; } }
+.ow-plan-loading { padding: 48px 0; text-align: center; strong { display: block; font-weight: 500; font-size: 17px; margin-top: 16px; } p { font-size: 15px; color: $color-text-secondary; margin: 16px 0; line-height: 1.8; } }
+.ow-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid $color-border; border-top-color: $color-primary; border-radius: 50%; animation: ow-spin .8s linear infinite; flex-shrink: 0; }
+.ow-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@keyframes ow-spin { to { transform: rotate(360deg); } }
+@media (max-width: 1050px) { .ow-layout { grid-template-columns: 190px minmax(0, 1fr); gap: 28px; } .ow-panel { padding: 28px; } .ow-flow li:not(:last-child)::after { left: 152px; right: 16px; } .ow-option { padding: 13px 16px; min-height: 60px; } }
+@media (max-width: 760px) {
+  .ow-header { min-height: 72px; padding: 16px 20px; gap: 14px; h1 { font-size: 15px; } } .ow-header-note { display: none; } .ow-return { margin-left: auto; } .ow-brand { gap: 7px; img { width: 32px; height: 32px; } span { font-size: 19px; letter-spacing: 2px; } }
+  .ow-flow { padding: 23px 20px; ol { gap: 8px; } button { flex-direction: column; gap: 9px; padding: 0; text-align: center; width: 100%; } strong { font-size: 14px; } small { display: none; } li:not(:last-child)::after { left: calc(50% + 25px); right: calc(-50% + 25px); top: 16px; } } .ow-node { width: 32px; height: 32px; }
+  .ow-main { padding: 24px 20px; } .ow-layout { grid-template-columns: 1fr; gap: 22px; } .ow-sidebar { position: static; padding: 0; h2 { font-size: 22px; margin: 7px 0; } } .ow-sidebar-description { margin: 0 0 14px; } .ow-sidebar-art, .ow-summary { display: none; }
+  .ow-directory { flex-direction: row; flex-wrap: wrap; gap: 6px; button { width: auto; padding: 8px 10px; font-size: 12px; gap: 7px; } } .ow-domain-directory button { flex: 1 0 calc(33.33% - 6px); } .ow-directory-dot { width: 5px; height: 5px; }
+  .ow-panel { padding: 26px 22px; h2 { font-size: 22px; } } .ow-option-text { font-size: 15px; } .ow-footer { padding: 14px 20px; } .ow-footer-inner { flex-wrap: wrap; gap: 10px; } .ow-footer-status { flex-basis: 100%; font-size: 11px; } .ow-footer-actions { width: 100%; justify-content: flex-end; } .ow-persona-stats { gap: 12px; dd { font-size: 26px; } }
+}
+@media (max-width: 430px) { .ow-header { gap: 10px; padding: 14px 16px; } .ow-header-divider { display: none; } .ow-return { padding: 8px 0; font-size: 12px; } .ow-main { padding: 20px 14px; } .ow-panel { padding: 24px 18px; } .ow-question-progress { flex-basis: 100%; margin-left: 0; margin-top: 4px; } .ow-group { flex-wrap: wrap; gap: 10px; } .ow-group .ow-segments { width: 100%; } .ow-option { gap: 10px; padding: 13px 12px; } .ow-persona-stats { grid-template-columns: 1fr; gap: 14px; > div { display: flex; align-items: baseline; justify-content: space-between; } dd { margin: 0; } } .ow-profile-details > div { grid-template-columns: 1fr; gap: 5px; } .ow-domain-directory button { flex-basis: calc(50% - 6px); } .ow-footer { padding: 14px 16px; } .ow-btn { padding: 10px 15px; } }
+@media (max-height: 820px) and (min-width: 761px) {
+  .ow-header { min-height: 70px; padding-top: 14px; padding-bottom: 14px; }
+  .ow-flow { padding-top: 18px; padding-bottom: 18px; }
+  .ow-main { padding-top: 20px; padding-bottom: 20px; }
+  .ow-panel { padding-top: 20px; padding-bottom: 20px; h2 { font-size: 23px; line-height: 1.5; margin-top: 12px; } }
+  .ow-help { margin-bottom: 16px; }
+  .ow-options { gap: 8px; }
+  .ow-option { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+  .ow-panel-note { margin-top: 16px; font-size: 13px; }
+  .ow-directory button { padding-top: 10px; padding-bottom: 10px; }
+  .ow-sidebar-art { margin-top: 18px; }
+  .ow-footer { padding-top: 14px; padding-bottom: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .ow-spinner { animation: none; } .ow-option { transition: none; } }
 </style>

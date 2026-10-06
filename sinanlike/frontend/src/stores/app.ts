@@ -1,17 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { checkBackendHealth } from '@/api/client'
-
-// ── 生成持久的用户标识 ──
-function getOrCreateUserId(): string {
-  const key = 'boc_user_id'
-  let id = localStorage.getItem(key)
-  if (!id) {
-    id = crypto.randomUUID()
-    localStorage.setItem(key, id)
-  }
-  return id
-}
+import { useAccountsStore } from '@/stores/accounts'
 
 export const useAppStore = defineStore('app', () => {
   // ── 侧栏折叠 ──
@@ -29,22 +19,26 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // ── 用户身份（会话持久化，保证跨刷新连续） ──
-  const userId = ref(getOrCreateUserId())
+  const accounts = useAccountsStore()
+  const userId = computed(() => accounts.userId)
 
   function getOrCreateSessionId(): string {
-    const key = 'boc_session_id'
-    let id = localStorage.getItem(key)
+    const key = accounts.isSignedIn ? 'boc_session_id' : 'lvyuan_guest_session'
+    const storage = accounts.isSignedIn ? localStorage : sessionStorage
+    let id = storage.getItem(key)
     if (!id) {
       id = crypto.randomUUID()
-      localStorage.setItem(key, id)
+      storage.setItem(key, id)
     }
     return id
   }
   const sessionId = ref(getOrCreateSessionId())
+  watch(userId, () => { sessionId.value = getOrCreateSessionId() }, { flush: 'sync' })
 
   function newSession() {
     sessionId.value = crypto.randomUUID()
-    localStorage.setItem('boc_session_id', sessionId.value)
+    if (accounts.isSignedIn) localStorage.setItem('boc_session_id', sessionId.value)
+    else sessionStorage.setItem('lvyuan_guest_session', sessionId.value)
   }
 
   /** 打开应用默认使用新窗口对话：
@@ -52,9 +46,10 @@ export const useAppStore = defineStore('app', () => {
    * 旧会话仍可通过「历史对话」列表切换。 */
   function ensureFreshSession() {
     try {
-      if (!sessionStorage.getItem('boc_app_opened')) {
+      const openedKey = `boc_app_opened:${userId.value}`
+      if (!sessionStorage.getItem(openedKey)) {
         newSession()
-        sessionStorage.setItem('boc_app_opened', '1')
+        sessionStorage.setItem(openedKey, '1')
       }
     } catch {
       /* sessionStorage 不可用（隐私模式等）则不强制新建 */

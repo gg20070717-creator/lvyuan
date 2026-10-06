@@ -80,7 +80,7 @@
           </div>
         </div>
 
-        <template v-if="!onboardingActive">
+        <div class="home-dashboard-sections">
         <!-- 快捷问题 -->
         <section class="section">
           <div class="section-header">
@@ -95,7 +95,7 @@
         </section>
 
         <!-- 统计卡片 -->
-        <div class="stats-row">
+        <div v-if="accounts.isSignedIn" class="stats-row">
           <div class="stat-card dark">
             <el-icon class="stat-card-icon flame"><Collection /></el-icon>
             <div class="stat-card-value">{{ userStats.attempted_skills }}</div>
@@ -122,7 +122,7 @@
         </div>
 
         <!-- 学习进度 -->
-        <section class="section">
+        <section v-if="accounts.isSignedIn" class="section">
           <div class="section-header">
             <h2 class="section-title">学习进度</h2>
             <button class="section-more" @click="$router.push('/app/training')">去训练场 <el-icon><ArrowRight /></el-icon></button>
@@ -166,25 +166,14 @@
         <div class="recommend-bar">
           <InkMountain class="rec-ink" />
           <div class="rec-info">
-            <span class="rec-tag">下一步建议</span>
-            <span class="rec-title">{{ recommendText }}</span>
-            <span class="rec-desc">基于你的学习画像与掌握度自动生成</span>
+            <span class="rec-tag">{{ accounts.isSignedIn ? '下一步建议' : '从你的起点出发' }}</span>
+            <span class="rec-title">{{ accounts.isSignedIn ? recommendText : '先逛逛，准备好后开启专属学习' }}</span>
+            <span class="rec-desc">{{ accounts.isSignedIn ? '基于你的学习画像与掌握度自动生成' : '注册后，旅鸢会结合你的经验与目标安排学习路线' }}</span>
           </div>
-          <button class="rec-btn" @click="goRecommend">{{ recommendAction }} <el-icon><ArrowRight /></el-icon></button>
+          <button class="rec-btn" @click="accounts.isSignedIn ? goRecommend() : accounts.openAccess()">{{ accounts.isSignedIn ? recommendAction : '登录 / 注册' }} <el-icon><ArrowRight /></el-icon></button>
         </div>
-        </template>
+        </div>
 
-        <!-- 先验画像 · 身份题在真实对话里由管家完成 -->
-        <div v-if="onboardingActive && !onb.identityDone" class="onb-start">
-          <div class="os-ic"><SIcon name="sparkle" :size="18" /></div>
-          <div class="os-main">
-            <div class="os-t">认识你，让实训更适合你</div>
-            <div class="os-d">管家会像平时出题一样，在对话里用题卡问你 6 个身份问题（点选项即可）。</div>
-          </div>
-          <button class="os-btn" @click="startIdentity"><SIcon name="msg" :size="13" />开始画像</button>
-        </div>
-        <!-- 身份题答完 → 能力自评（7 域 / 84 组） -->
-        <OnboardingWizard v-if="onboardingActive && onb.identityDone" @done="onOnboardingDone" />
       </div>
     </div>
 
@@ -425,7 +414,6 @@
             </button>
           </div>
 
-          <OnboardingWizard v-if="inChat && onb.identityDone && !onb.done" class="onb-in-chat" @done="onOnboardingDone" />
           <!-- 任务阶段提示条（轮询期间展示） -->
           <div v-if="sending && taskPhase && liveTrace.length === 0" class="task-phase-bar">
             <span class="ma-spin sm"></span>
@@ -564,7 +552,7 @@ import { nextStepFromTree } from '@/utils/nextStep'
 import type { SkillNode } from '@/api/knowledge'
 import { useAppStore } from '@/stores/app'
 import { useOnboardingStore } from '@/stores/onboarding'
-import OnboardingWizard from '@/components/OnboardingWizard.vue'
+import { useAccountsStore } from '@/stores/accounts'
 import { classifyError, ApiErrorType } from '@/api/client'
 import { ElMessage } from 'element-plus'
 
@@ -572,13 +560,13 @@ const store = useAppStore()
 const router = useRouter()
 const route = useRoute()
 const onb = useOnboardingStore()
-const onboardingActive = computed(() => !onb.done && !onb.loading)
-
-function onOnboardingDone() {
-  // 完成引导：刷新画像状态与仪表盘数据
-  onb.load(store.userId)
-  loadState()
+const accounts = useAccountsStore()
+function requireLearningAccount() {
+  if (!accounts.isSignedIn) { accounts.openAccess(); return false }
+  if (!onb.done) { accounts.openOnboarding(); return false }
+  return true
 }
+watch(() => onb.done, (done) => { if (done && accounts.isSignedIn) void loadState() })
 
 // ── 对话状态 ──
 const inputText = ref('')
@@ -1030,6 +1018,7 @@ async function scrollToBottom() {
 }
 
 function handleNewSession() {
+  if (!requireLearningAccount()) return
   stopThinkingAnim()
   attachOpen.value = false
   store.newSession()
@@ -1052,11 +1041,13 @@ const historyOpen = ref(false)
 const historyList = ref<SessionItem[]>([])
 
 function toggleHistory() {
+  if (!requireLearningAccount()) return
   historyOpen.value = !historyOpen.value
   if (historyOpen.value && !historyList.value.length) refreshHistory()
 }
 
 async function refreshHistory() {
+  if (!accounts.isSignedIn) return
   try {
     const res = await listSessions(store.userId)
     historyList.value = res.sessions || []
@@ -1152,6 +1143,7 @@ function submitEssayAnswer() {
 async function handleSend() {
   const content = inputText.value.trim()
   if (!content || sending.value) return
+  if (!requireLearningAccount()) return
   const focus = hardFocus.value
   hardFocus.value = null
   messages.value.push({ role: 'user', content })
@@ -1216,12 +1208,6 @@ async function handleSend() {
     stopThinkingAnim()
     scrollToBottom()
   }
-}
-
-function startIdentity() {
-  if (sending.value) return
-  inputText.value = '开始先验学情画像'
-  handleSend()
 }
 
 function sendQuick(q: string) {
@@ -1291,6 +1277,7 @@ function goTraining() { router.push('/app/training') }
 function goKnowledge() { router.push('/app/knowledge') }
 
 async function loadState() {
+  if (!accounts.isSignedIn) return
   try {
     const state = await getUserState(store.userId)
     userStats.value = state.stats || userStats.value
@@ -1336,10 +1323,9 @@ const quickQuestions = [
 ]
 
 onMounted(() => {
-  store.ensureFreshSession()  // 打开应用默认新窗口对话（刷新保持；历史会话可切换）
-  onb.load(store.userId)      // 首登引导状态（决定是否展示先验画像流程 / 模块锁）
-  onb.loadQa(store.userId)     // 身份问答是否完成（决定对话中出题卡还是能力自评）
   loadSkillTitles()
+  if (!accounts.isSignedIn) return
+  store.ensureFreshSession()  // 每个账户的会话独立，游客浏览不创建学习记录。
   loadState()
   loadTeachingState()
   refreshHistory()
@@ -1555,8 +1541,8 @@ async function handlePendingSandbox() {
 }
 .rec-info { position: relative; display: flex; flex-direction: column; gap: 4px; }
 .rec-tag { font-size: 12px; font-weight: 500; color: rgba(51, 143, 242, 0.9); }
-.rec-title { font-family: $font-serif; font-size: 15px; font-weight: 600; color: #FFFFFF; }
-.rec-desc { font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+.rec-title { font-family: $font-serif; font-size: 15px; font-weight: 600; color: #173e65; }
+.rec-desc { font-size: 12px; color: #456987; }
 .rec-btn { position: relative; display: flex; align-items: center; gap: 4px; padding: 10px 20px; border-radius: $radius-md; border: none; background: $color-accent; color: #FFFFFF; font-size: 14px; font-weight: 500; cursor: pointer; flex-shrink: 0; }
 
 /* ══════════════ 纯对话页 ══════════════ */
@@ -2373,12 +2359,6 @@ async function handlePendingSandbox() {
 
   .ca-text { font-size: 12px; color: $color-text-secondary; }
 }
-
-.onb-start { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 14px; background: linear-gradient(120deg, $color-primary, $color-primary-light); color: #fff;
-  .os-ic { width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .os-main { flex: 1; .os-t { font-size: 15px; font-weight: 800; } .os-d { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 3px; } }
-  .os-btn { background: $color-accent; color: #fff; border: none; border-radius: 999px; padding: 9px 18px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; } }
-.onb-in-chat { margin: 12px 0; }
 
 // ── 教学状态条（一对一教学闭环） ──
 .teach-bar {

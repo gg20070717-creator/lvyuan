@@ -64,19 +64,20 @@ const router = createRouter({
   routes,
 })
 
-// 首登模块锁：未完成先验学情画像前，只能待在首页（对话/答题），其它模块拦截
-import { ElMessage } from 'element-plus'
+// 首页可自由浏览，个人学习模块由用户主动登录或完善画像后进入。
 import { useOnboardingStore } from '@/stores/onboarding'
+import { useAccountsStore } from '@/stores/accounts'
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const isAppModule = to.path.startsWith('/app/')
   if (!isAppModule || to.path === '/app/home') return true
   try {
+    const accounts = useAccountsStore()
+    if (!accounts.isSignedIn) { accounts.openAccess(to.fullPath); return { path: '/app/home' } }
     const st = useOnboardingStore()
-    // 状态尚未从后端加载且本地也无“已完成”标记 → 先放行一次（Home/Main 加载后会再拦）
-    if (!st.loaded && !st.done) return true
+    if (!st.loaded || st.loadedUserId !== accounts.userId) await st.load(accounts.userId)
     if (!st.done) {
-      ElMessage.warning('请先在首页完成“先验学情画像”后再进入该模块')
+      accounts.openOnboarding(to.fullPath)
       return { path: '/app/home' }
     }
   } catch { /* pinia 未就绪则放行 */ }
