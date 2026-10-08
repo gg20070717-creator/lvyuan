@@ -3,7 +3,7 @@
     <header class="lp-head">
       <div class="lp-title">
         <h2>学习路线规划</h2>
-        <span v-if="path" class="lp-ver">第 {{ path.version }} 版 · {{ fmtTime(path.created_at) }}</span>
+        <span v-if="path" class="lp-ver">第 {{ path.version }} 版   {{ fmtTime(path.created_at) }}</span>
       </div>
       <div class="lp-modes">
         <button class="lp-mode" :class="{ on: mode === 'guided' }" @click="mode = 'guided'">导学模式</button>
@@ -11,7 +11,7 @@
       </div>
       <div class="lp-page-nav" v-if="path">
         <button class="pg" :disabled="page <= 0" @click="page--"><SIcon name="back" :size="12" />上一页</button>
-        <span class="pg-info">第 {{ page + 1 }} / {{ totalPages }} 页 · {{ pageSkills.length }} 点</span>
+        <span class="pg-info">第 {{ page + 1 }} 页，共 {{ totalPages }} 页   {{ pageSkills.length }} 点</span>
         <button class="pg" :disabled="page >= totalPages - 1" @click="page++">下一页<SIcon name="right" :size="12" /></button>
       </div>
       <button class="lp-refresh" @click="load"><SIcon name="sparkle" :size="13" />刷新</button>
@@ -21,8 +21,8 @@
     <!-- 向旅鸢提意见：旅鸢结合画像/掌握度重排路线，硬校验通过才落库 -->
     <div v-if="fbOpen" class="fb-mask" @click.self="closeAsk">
       <div class="fb-card">
-        <div class="fb-title">向旅鸢提意见 · 调整学习路线</div>
-        <div class="fb-sub">例如：“我想先学文化桥/日本游客接待”“把XX提前”“最近先补应急”——旅鸢会结合你的画像与掌握度重新排序，校验规范后生成新版路线。</div>
+        <div class="fb-title">向旅鸢提意见   调整学习路线</div>
+        <div class="fb-sub">例如：“我想先学文化桥、日本游客接待”“把XX提前”“最近先补应急”——旅鸢会结合你的画像与掌握度重新排序，校验规范后生成新版路线。</div>
         <textarea v-model="fbText" class="fb-input" rows="3" placeholder="说说你想怎么调整学习顺序…" />
         <div class="fb-actions">
           <button class="fb-cancel" @click="closeAsk">取消</button>
@@ -43,10 +43,10 @@
       <div class="lp-legend">
         <span><i class="dot full"></i>已点亮 100%</span>
         <span><i class="dot mid"></i>掌握中（≥60%）</span>
-        <span><i class="dot low"></i>起步/未学</span>
+        <span><i class="dot low"></i>起步、未学</span>
         <span><i class="dot lock"></i>导学锁定</span>
         <span><i class="dot cur"></i>当前位置</span>
-        <span class="lp-hint">按住空白拖动平移 · 点卡片查看/去学习</span>
+        <span class="lp-hint">按住空白拖动平移   点卡片查看、去学习</span>
       </div>
 
       <div class="lp-stage">

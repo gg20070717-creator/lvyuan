@@ -23,7 +23,7 @@
               </div>
               <div class="phc-meta">
                 <span><el-icon><User /></el-icon> ID: {{ shortUserId }}</span>
-                <span class="meta-sep">·</span>
+                <span class="meta-sep"> </span>
                 <span><el-icon><Aim /></el-icon> {{ profile.targetRole || '导游资格证' }}</span>
               </div>
               <p class="phc-bio">{{ personaSummary || profile.background || '尚未生成学情画像——请先到首页完成「先验学情画像」（6 道身份题 + 能力自评）。' }}</p>
@@ -67,7 +67,7 @@
         </div>
         <div v-if="nextChapter" class="pp-next">
           <SIcon name="sparkle" :size="13" color="#338FF2" />
-          <span>建议下一步：<b>{{ nextChapter.bookTitle }} · {{ nextChapter.title }}</b>
+          <span>建议下一步：<b>{{ nextChapter.bookTitle }}   {{ nextChapter.title }}</b>
             （当前掌握 {{ nextChapter.mastery }}%，先让旅鸢讲一遍再做真题）</span>
           <button class="pp-go" @click="$router.push('/app/knowledge')">去学习</button>
         </div>
@@ -112,7 +112,7 @@
         <div class="memory-grid">
           <div v-for="m in memories" :key="String(m.memory_id)" class="memory-card">
             <el-tag size="small" :type="memoryTagType(String(m.memory_type))" effect="plain">{{ memoryLabels[String(m.memory_type)] || '记忆' }}</el-tag>
-            <p class="memory-content">{{ m.content }}</p>
+            <p class="memory-content">{{ display(m.content) }}</p>
           </div>
         </div>
       </div>
@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { cleanDisplayText as display } from '@/utils/displayText'
 import { useRouter } from 'vue-router'
 import {
   StarFilled, User, Setting, SwitchButton,
@@ -267,7 +268,7 @@ const computedStats = computed(() => {
 
   return [
     { icon: Reading, label: '覆盖技能点', value: total, unit: '个', color: '#338FF2' },
-    { icon: Clock, label: '已掌握', value: mastered, unit: '/' + total, color: '#338FF2' },
+    { icon: Clock, label: '已掌握', value: mastered, unit: '个，共 ' + total + ' 个', color: '#338FF2' },
     { icon: StarFilled, label: '平均掌握度', value: avgScore, unit: '%', color: '#338FF2' },
     { icon: TrophyBase, label: '答题记录', value: recentProgress.value.reduce((s, r) => s + (r.attempt_count || 0), 0), unit: '次', color: '#338FF2' },
   ]
@@ -340,7 +341,7 @@ async function handleExportData() {
     a.download = `旅鸢学习数据_${store.userId.slice(0, 8)}.json`
     a.click()
     URL.revokeObjectURL(url)
-    ElMessage.success('学习数据已导出（画像/记忆/进度/资产，已按合规要求不含敏感字段）')
+    ElMessage.success('学习数据已导出（画像、记忆、进度、资产，已按合规要求不含敏感字段）')
   } catch (e) {
     ElMessage.error('导出失败：' + classifyError(e))
   } finally {
@@ -408,7 +409,7 @@ onMounted(() => {
   border-radius: $radius-md;
   background: #fef3e2;
   border: 1px solid #f5d9a0;
-  color: #a06315;
+  color: #8f5813;
   font-size: 13px;
 }
 
@@ -513,7 +514,7 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 500;
   background: rgba(51, 143, 242, 0.25);
-  color: $color-accent;
+  color: $color-text-link;
   border: 1px solid rgba(51, 143, 242, 0.3);
 }
 
@@ -568,7 +569,7 @@ onMounted(() => {
   .pf-stat-value {
     font-size: 28px;
     font-weight: 700;
-    color: $color-primary;
+    color: $color-text-link;
     margin-top: 8px;
   }
   .pf-stat-label {
@@ -606,7 +607,7 @@ onMounted(() => {
   gap: 4px;
   font-size: 12px;
   font-weight: 600;
-  color: $color-primary;
+  color: $color-text-link;
   margin-right: 2px;
 }
 .radar-weak-chip {
@@ -629,7 +630,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #2d8a2d;
+  color: #267326;
 }
 
 // ── 通用 section ──
@@ -649,7 +650,7 @@ onMounted(() => {
     font-family: $font-serif;
     font-size: 16px;
     font-weight: 600;
-    color: $color-primary;
+    color: $color-text-link;
   }
 }
 
@@ -771,10 +772,10 @@ onMounted(() => {
   padding: 4px 12px;
   border-radius: 999px;
   background: rgba(24, 58, 99, 0.1);
-  color: $color-primary;
+  color: $color-text-link;
   &.high {
     background: $color-accent-light;
-    color: $color-accent-d10;
+    color: $color-text-link;
   }
 }
 
@@ -856,12 +857,12 @@ onMounted(() => {
     font-size: 9.5px; color: $color-text-secondary; background: rgba(255,255,255,.92); padding: 1px 7px;
     border-radius: 10px; border: 1px solid $color-border; opacity: 0; transition: opacity .18s; pointer-events: none; z-index: 4; }
   .ct { position: absolute; right: calc(100% + 6px); top: 50%; transform: translateY(-50%); white-space: nowrap;
-    font-size: 8.5px; font-family: 'Liberation Mono', monospace; color: #B5B0A6; opacity: 0;
+    font-size: 8.5px; font-family: 'Liberation Mono', monospace; color: $color-text-secondary; opacity: 0;
     transition: opacity .18s; pointer-events: none; z-index: 4; }
   &:hover .lb, &:hover .ct, &.sel .lb, &.sel .ct { opacity: 1; }
   &:hover, &.sel { z-index: 6; }
   &:hover .orb { transform: scale(1.1); border-color: $color-accent; }
-  &.unlocked { .orb { background: #fff; border: 1.5px solid #338FF2; color: #338FF2;
+  &.unlocked { .orb { background: #fff; border: 1.5px solid #338FF2; color: $color-text-link;
       box-shadow: 0 0 0 3px rgba(51,143,242,.15);
       > svg { opacity: 1; } }
     .lb { color: #256CA7; font-weight: 600; border-color: rgba(51,143,242,.4); } }
@@ -875,11 +876,11 @@ onMounted(() => {
 @keyframes skGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(51,143,242,.25); } 50% { box-shadow: 0 0 0 6px rgba(51,143,242,.1); } }
 .sk-lockbadge { position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%;
   background: #fff; border: 1px solid $color-border; display: flex; align-items: center; justify-content: center;
-  color: #B5B0A6; }
+  color: $color-text-secondary; }
 .sk-detail { margin-top: 16px; padding: 16px; border-radius: 14px; background: rgba(24,58,99,.04);
   border: 1px solid rgba(24,58,99,.1);
   .sk-dh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
-    .t { font-size: 14px; font-weight: 700; color: $color-primary; font-family: $font-serif; }
+    .t { font-size: 14px; font-weight: 700; color: $color-text-link; font-family: $font-serif; }
     .st { font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
       &.on { color: #fff; background: linear-gradient(135deg, #338FF2, #A8893C); }
       &.can { color: #256CA7; background: rgba(51,143,242,.12); border: 1px solid rgba(51,143,242,.3); }
@@ -916,21 +917,21 @@ onMounted(() => {
   &.weak { border-color: rgba(208,90,78,.3); }
   .pp-dot { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #338FF2, #A8893C);
     color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-  .pp-name { font-size: 12.5px; font-weight: 600; color: $color-primary; max-width: 150px; white-space: nowrap;
+  .pp-name { font-size: 12.5px; font-weight: 600; color: $color-text-link; max-width: 150px; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; }
   .pp-track { width: 70px; height: 5px; border-radius: 3px; background: rgba(24,58,99,.08); overflow: hidden;
     .pp-fill { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #338FF2, #A8893C); } }
   .pp-avg { font-size: 11px; font-family: Consolas, monospace; color: #256CA7; } }
-.pp-arrow { color: #B5B0A6; display: flex; }
+.pp-arrow { color: $color-text-secondary; display: flex; }
 .pp-next { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 12px 14px;
   border-radius: 12px; background: rgba(51,143,242,.08); border: 1px solid rgba(51,143,242,.25);
   font-size: 12.5px; line-height: 1.7; color: $color-text-secondary;
-  b { color: $color-primary; }
+  b { color: $color-text-link; }
   .pp-go { margin-left: auto; flex-shrink: 0; padding: 6px 14px; border: none; border-radius: 9px;
     background: linear-gradient(135deg, #338FF2, #A8893C); color: #fff; font-size: 12px; font-weight: 600;
     cursor: pointer; align-self: center;
     &:hover { box-shadow: 0 3px 10px rgba(51,143,242,.4); } }
-  &.all-done { background: rgba(45,138,45,.06); border-color: rgba(45,138,45,.3); color: #2d8a2d; } }
+  &.all-done { background: rgba(45,138,45,.06); border-color: rgba(45,138,45,.3); color: #267326; } }
 .pp-empty { margin-top: 14px; padding: 18px; text-align: center; font-size: 12.5px; color: $color-text-secondary;
   border: 1px dashed $color-border; border-radius: $radius-md; }
 </style>

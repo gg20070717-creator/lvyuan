@@ -1,13 +1,13 @@
 <template>
-  <div class="acm" :class="{ compact }">
-    <button class="acm-user" @click.stop="toggle" :title="store.isSignedIn ? '当前用户：' + store.currentName() : '登录 / 注册'" :aria-expanded="store.isSignedIn ? open : undefined">
+  <div class="acm" :class="{ compact, horizontal }">
+    <button class="acm-user" @click.stop="toggle" :title="store.isSignedIn ? '当前用户：' + store.currentName() : '登录、注册'" :aria-expanded="store.isSignedIn ? open : undefined">
       <span class="acm-av"><template v-if="store.isSignedIn">{{ char }}</template><SIcon v-else name="user" :size="17" />
         <i class="conn" :class="{ on: app.backendOnline }"
-          :title="app.backendOnline ? '后端已连接' : '离线 · 演示模式'"></i>
+          :title="app.backendOnline ? '后端已连接' : '离线   演示模式'"></i>
       </span>
       <span class="acm-txt">
-        <span class="n">{{ store.isSignedIn ? store.currentName() : '登录 / 注册' }}</span>
-        <span class="d">{{ store.isSignedIn ? (onb.done ? '你的学习空间' : '继续完善学情画像') : '游客浏览 · 开启专属学习' }}</span>
+        <span class="n">{{ store.isSignedIn ? store.currentName() : '登录、注册' }}</span>
+        <span class="d">{{ store.isSignedIn ? (onb.done ? '你的学习空间' : '继续完善学情画像') : '游客浏览   开启专属学习' }}</span>
       </span>
       <SIcon class="chev" :name="open ? 'up' : 'right'" :size="11" />
     </button>
@@ -48,7 +48,7 @@ const app = useAppStore()
 const open = ref(false)
 const onb = useOnboardingStore()
 const router = useRouter()
-defineProps<{ compact?: boolean }>()
+defineProps<{ compact?: boolean; horizontal?: boolean }>()
 function toggle() { if (!store.isSignedIn) store.openAccess(); else open.value = !open.value }
 function logout() { open.value = false; store.signOut(); void router.push('/app/home') }
 
@@ -67,7 +67,7 @@ async function onClear() {
   open.value = false
   try {
     await ElMessageBox.confirm(
-      '将永久删除当前用户在服务器上积累的画像/进度/错题/会话/学习路径等全部数据，并回到初始引导。确定清空吗？',
+      '将永久删除当前用户在服务器上积累的画像、进度、错题、会话、学习路径等全部数据，并回到初始引导。确定清空吗？',
       '清空本用户数据',
       { type: 'warning', confirmButtonText: '清空并重来', cancelButtonText: '取消' },
     )
@@ -99,6 +99,15 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
 @use '@/styles/tokens' as *;
 
 .acm { position: relative; padding: 0 8px 10px; }
+.acm.horizontal { padding:0; flex-shrink:0; max-width:180px;
+  .acm-user { padding:7px 0 7px 7px; gap:8px; }
+  .acm-txt .n { font-size:12px; font-weight:500; }
+  .acm-txt .d { display:none; }
+  .acm-av { background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.3); }
+  .acm-panel { bottom:auto; top:calc(100% + 10px); left:auto; right:0; width:260px; max-width:calc(100vw - 28px); }
+  .account-menu-enter-from, .account-menu-leave-to { transform:translateY(-6px); }
+}
+@media(max-width:560px) { .acm.horizontal { max-width:130px; .acm-av { display:none; } .acm-user { padding-left:0; } .chev { display:none; } } }
 .acm.compact { padding: 0 0 10px; .acm-user { justify-content: center; } .acm-txt, .chev { display: none; } .acm-panel { width: 220px; right: auto; left: 4px; } }
 .account-menu-enter-active, .account-menu-leave-active { transition: opacity .18s ease, transform .2s ease; }
 .account-menu-enter-from, .account-menu-leave-to { opacity: 0; transform: translateY(8px); }
@@ -128,6 +137,6 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
       i { font-style: normal; font-size: 11px; color: $color-text-secondary; } } }
   .acm-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; border-top: 1px solid $color-border; padding-top: 8px;
     .acm-act { display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 8px; padding: 7px 10px; font-size: 12.5px; cursor: pointer; text-align: left;
-      &.primary { background: $color-primary; color: #fff; } &.danger { background: #fdeeee; color: #c0504d; } } }
+      &.primary { background: $color-primary; color: #fff; } &.danger { background: #fdeeee; color: #a74543; } } }
   .acm-tip { margin-top: 8px; font-size: 11px; color: $color-text-secondary; line-height: 1.6; } }
 </style>

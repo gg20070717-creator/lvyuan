@@ -46,6 +46,7 @@ from brain_of_cloud.services.mastery import MasteryService
 from brain_of_cloud.services.orchestrator import Orchestrator
 from brain_of_cloud.services.sandbox import SandboxError, SandboxService
 from brain_of_cloud.services.task_runner import TaskRunner
+from brain_of_cloud.services.agent_catalog import AGENTS, RESERVED
 from brain_of_cloud.services.training import TrainingService
 from brain_of_cloud.storage.sqlite import SQLiteStore
 from brain_of_cloud.voice import evaluate_scene, get_scene, list_scenes, transcribe_audio
@@ -125,6 +126,39 @@ def create_app(
     profile_agent = ProfileAgent(llm_client)
     training_analyzer = TrainingAnalyzerAgent(llm_client, training)
 
+    @app.get("/agents/catalog")
+    def agent_catalog():
+        return {"agents": AGENTS, "reserved": RESERVED, "active_count": len(AGENTS),
+                "note": "13 个学习协作角色与 4 个实战角色；3 个生成角色仍为预留。"}
+
+    @app.get("/learning/status")
+    def learning_status(user_id: str, session_id: str):
+        """读取持久化学习证据，由确定性规则推荐下一步，不额外调用模型。"""
+        state = store.get_teaching_state(session_id) or {}
+        if state and state.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="会话属于其它账户")
+        teaching = orchestrator._teaching_public(state) if state else None
+        topic_ids = state.get("topic_ids") or []
+        ms = MasteryService(plugin, store)
+        mastery = [ms.skill_mastery(user_id, nid) for nid in topic_ids]
+        score = round(sum(float(x["mastery"]) for x in mastery) / len(mastery), 1) if mastery else None
+        stage = state.get("stage", "idle")
+        if state.get("reteach_question_id") or state.get("consecutive_incorrect", 0) > 0:
+            recommendation = {"label": "先复习错因，再作答", "reason": "当前存在待巩固的错题，继续当前题目可完成纠错闭环。", "path": "/app/home"}
+        elif state.get("topic_finished") or (teaching and teaching.get("topic_done")) or (score is not None and score >= 80):
+            recommendation = {"label": "进入综合实战", "reason": f"当前主题综合掌握度 {score}%" if score is not None else "当前主题题目已完成，可以在场景中检验应用能力。", "path": "/app/training?focus=integrated"}
+        elif stage == "practicing":
+            recommendation = {"label": "继续抽题测验", "reason": "题目已就绪，作答后会更新掌握度与难度。", "path": "/app/home"}
+        else:
+            recommendation = {"label": "学习后做题巩固", "reason": "先理解知识，再用题目验证，旅鸢将按作答情况调整难度。", "path": "/app/home"}
+        records = sandbox.list_user_records(user_id)
+        return {"teaching": teaching, "mastery": score, "profile_done": bool(store.get_onboarding_profile(user_id)),
+                "quiz_count": len(state.get("quiz_history") or []), "questions_answered": len(store.get_submissions(user_id)),
+                "practice_count": sum(r.get("score") is not None for r in records),
+                "specialty_count": sum(r.get("score") is not None and r.get("mode") in ("scenario", "communication", "narrate") for r in records),
+                "integrated_count": sum(r.get("score") is not None and r.get("mode") == "fullflow" for r in records),
+                "recommendation": recommendation, "source": "teaching_state + mastery + sandbox_records"}
+
     # ================= 对话（异步任务） =================
 
     @app.post("/messages", response_model=MessageResponse)
@@ -183,6 +217,7 @@ def create_app(
             assets=record.result.get("assets", []),
             trace=list(record.trace),
             teaching=record.result.get("teaching"),
+            payload=record.result.get("payload"),
         )
 
     # ================= 教学会话状态 =================
@@ -561,6 +596,36 @@ def create_app(
         return svc.structural_search(q, plugin.knowledge_base)
 
     # ================= 对话式沙盒 =================
+
+    def owned_sandbox(session_id: str, user_id: str):
+        try:
+            session = sandbox.get_session(session_id)
+        except SandboxError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if session["user_id"] != user_id:
+            raise HTTPException(status_code=403, detail="会话属于其它账户")
+        return session
+
+    @app.post("/sandbox/tasks/start")
+    def sandbox_start_task(request: SandboxSessionCreateRequest):
+        tid = tasks.submit(sandbox.start_session, result_builder=lambda value: {"payload": value},
+                           user_id=request.user_id, template_id=request.template_id, mode=request.mode,
+                           language=request.language or None, voice=request.voice or None, trace_cb=None)
+        return {"task_id": tid}
+
+    @app.post("/sandbox/sessions/{session_id}/messages/tasks")
+    def sandbox_message_task(session_id: str, request: SandboxSendMessageRequest):
+        owned_sandbox(session_id, request.user_id)
+        tid = tasks.submit(sandbox.send_message, result_builder=lambda value: {"payload": value},
+                           session_id=session_id, user_text=request.content, trace_cb=None)
+        return {"task_id": tid}
+
+    @app.post("/sandbox/sessions/{session_id}/end/tasks")
+    def sandbox_end_task(session_id: str, request: SandboxEndRequest):
+        owned_sandbox(session_id, request.user_id)
+        tid = tasks.submit(sandbox.end_session, result_builder=lambda value: {"payload": value},
+                           session_id=session_id, user_id=request.user_id, trace_cb=None)
+        return {"task_id": tid}
 
     @app.get("/sandbox/templates")
     def sandbox_templates(mode: str | None = None):

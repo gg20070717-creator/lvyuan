@@ -45,7 +45,7 @@
               <text :x="labelPos(i).x" :y="labelPos(i).y + 4" class="ep-label" text-anchor="middle">{{ shortOf(d.title) }}</text>
             </g>
           </svg>
-          <div class="lip-radar-cap" v-if="selDomain">当前查看：{{ selDomain.title }} · 综合掌握度 <b>{{ Math.round(selDomain.avg_mastery) }}%</b></div>
+          <div class="lip-radar-cap" v-if="selDomain">当前查看：{{ selDomain.title }}   综合掌握度 <b>{{ Math.round(selDomain.avg_mastery) }}%</b></div>
           </div>
           <div class="lip-groups">
             <div class="lip-groups-head">
@@ -150,10 +150,10 @@ const selGroups = computed(() => selDomain.value?.groups || [])
 const timeline = computed(() => {
   const items: Array<{ kind: string; title: string; desc: string; created_at?: string }> = []
   for (const p of records.value?.profile_snapshots || []) {
-    items.push({ kind: 'profile', title: `学情画像 · 第 ${p.version} 版`, desc: p.persona?.label || p.source, created_at: p.created_at })
+    items.push({ kind: 'profile', title: `学情画像   第 ${p.version} 版`, desc: p.persona?.label || p.source, created_at: p.created_at })
   }
   for (const lp of records.value?.learning_paths || []) {
-    items.push({ kind: 'path', title: `学习路径 · 第 ${lp.version} 版`, desc: lp.note || lp.status, created_at: lp.created_at })
+    items.push({ kind: 'path', title: `学习路径   第 ${lp.version} 版`, desc: lp.note || lp.status, created_at: lp.created_at })
   }
   items.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
   return items
@@ -211,7 +211,7 @@ onMounted(load)
 .lip { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
 .lip-main { background: #fff; border: 1px solid $color-border; border-radius: 14px; padding: 14px 16px; }
 .lip-main-head { display: flex; align-items: center; margin-bottom: 10px;
-  .lip-main-t { display: inline-flex; align-items: center; gap: 7px; color: $color-primary; font-size: 14px; font-weight: 800; letter-spacing: .5px; }
+  .lip-main-t { display: inline-flex; align-items: center; gap: 7px; color: $color-text-link; font-size: 14px; font-weight: 800; letter-spacing: .5px; }
   .lip-refresh { margin-left: auto; background: $color-primary; color: #fff; border: none; border-radius: 999px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; &:disabled { opacity: .6; } } }
 .lip-block { border-top: 1px dashed $color-border; padding-top: 12px; margin-top: 4px; }
 .lip-block-t { display: flex; align-items: center; font-size: 12px; font-weight: 800; color: $color-accent-d15; letter-spacing: .5px; margin-bottom: 8px;
@@ -223,9 +223,9 @@ onMounted(load)
 .lip-desc { font-size: 12.5px; color: $color-text-secondary; line-height: 1.8; }
 .lip-hint { font-size: 12.5px; color: $color-text-secondary; }
 .lip-loading { font-size: 12.5px; color: $color-text-secondary; margin-top: 8px; }
-.lip-empty-ok { color: #2d8a45; font-size: 13px; padding: 6px 0; }
+.lip-empty-ok { color: #26733a; font-size: 13px; padding: 6px 0; }
 .blind-n { margin-left: auto; font-size: 11px; color: #256CA7; background: rgba(51,143,242,.18); padding: 2px 8px; border-radius: 999px; }
-.rep-h { font-size: 12px; font-weight: 800; color: $color-primary; letter-spacing: .5px; margin: 12px 0 6px; display: flex; align-items: center; gap: 6px;
+.rep-h { font-size: 12px; font-weight: 800; color: $color-text-link; letter-spacing: .5px; margin: 12px 0 6px; display: flex; align-items: center; gap: 6px;
   &::before { content: ''; width: 4px; height: 13px; border-radius: 2px; background: $color-primary; display: inline-block; }
   &.gold { color: $color-accent-d15; &::before { background: $color-accent; } } }
 .lip-talk { font-size: 13px; line-height: 1.85; color: $color-text; background: $color-secondary-bg; border-radius: 10px; padding: 10px 13px; margin: 6px 0 0; }
@@ -250,7 +250,7 @@ onMounted(load)
 .lip-radar .c-tag { font-size: 10.5px; fill: #8a7b58; }
 
 .lip-radar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
-.lip-radar-cap { font-size: 12px; color: $color-text-secondary; b { color: $color-primary; } }
+.lip-radar-cap { font-size: 12px; color: $color-text-secondary; b { color: $color-text-link; } }
 .lip-groups { flex: 1; min-width: 240px; border: 1px solid $color-border; border-radius: 10px; background: #fff; padding: 8px 10px; }
 .lip-groups-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;
   .lg-title { font-size: 13px; font-weight: 800; color: $color-text; }
@@ -261,8 +261,8 @@ onMounted(load)
   .lg-bar { flex: 1; height: 6px; border-radius: 999px; background: $color-muted-bg; overflow: hidden; min-width: 60px;
     u { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, $color-accent, $color-accent-d15); } }
   .lg-pct { width: 30px; text-align: right; color: $color-text-secondary; }
-  .lg-weak { font-size: 10.5px; color: #c0504d; flex-shrink: 0; }
-  .lg-ok { font-size: 10.5px; color: #2d8a45; flex-shrink: 0; } }
+  .lg-weak { font-size: 10.5px; color: #a74543; flex-shrink: 0; }
+  .lg-ok { font-size: 10.5px; color: #26733a; flex-shrink: 0; } }
 
 .lip-timeline { display: flex; flex-direction: column; gap: 8px; }
 .lip-rec { display: flex; align-items: center; gap: 10px;

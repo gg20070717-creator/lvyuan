@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { learningNavigation, resolveLearningNavigation } from '@/utils/navigation'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -29,7 +30,7 @@ const routes: RouteRecordRaw[] = [
         path: 'knowledge-tree',
         name: 'knowledge-tree',
         component: () => import('@/views/KnowledgeSkillTreeView.vue'),
-        meta: { title: '知识技能树' },
+        meta: { title: '知识学习' },
       },
       {
         path: 'path',
@@ -41,7 +42,7 @@ const routes: RouteRecordRaw[] = [
         path: 'training',
         name: 'training',
         component: () => import('@/views/TrainingGroundView.vue'),
-        meta: { title: '训练场' },
+        meta: { title: '专项练习与综合实战', publicBrowse: true },
       },
       {
         path: 'toolbox',
@@ -53,7 +54,7 @@ const routes: RouteRecordRaw[] = [
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/ProfileView.vue'),
-        meta: { title: '学情中心' },
+        meta: { title: '自我画像与学情' },
       },
     ],
   },
@@ -70,7 +71,7 @@ import { useAccountsStore } from '@/stores/accounts'
 
 router.beforeEach(async (to) => {
   const isAppModule = to.path.startsWith('/app/')
-  if (!isAppModule || to.path === '/app/home') return true
+  if (!isAppModule || to.path === '/app/home' || to.meta.publicBrowse) return true
   try {
     const accounts = useAccountsStore()
     if (!accounts.isSignedIn) { accounts.openAccess(to.fullPath); return { path: '/app/home' } }
@@ -86,8 +87,9 @@ router.beforeEach(async (to) => {
 
 // 全局标题守卫
 router.afterEach((to) => {
-  const title = (to.meta.title as string) || '旅鸢'
-  document.title = title === '旅鸢' ? '旅鸢——中国入境游旅行定制师多智能体协同实训平台' : `${title} · 旅鸢`
+  const active = resolveLearningNavigation(to.path, to.query)
+  const title = learningNavigation.find(group => group.id === active?.section)?.items.find(item => item.id === active?.item)?.label || (to.meta.title as string) || '旅鸢'
+  document.title = title === '旅鸢' ? '旅鸢——中国入境游旅行定制师多智能体协同实训平台' : `${title}   旅鸢`
 })
 
 export default router

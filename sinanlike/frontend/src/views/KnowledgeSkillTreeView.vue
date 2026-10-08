@@ -3,10 +3,10 @@
     <div class="kst-inner">
       <header class="ph">
         <div class="ph-left">
-          <h2 class="ph-title">知识技能树</h2>
-          <p class="ph-desc">从领域到技能点，沿着知识脉络探索你的成长方向</p>
+          <h2 class="ph-title">知识学习</h2>
+          <p class="ph-desc">按具体知识点学习、做题，查看每项技能的掌握情况</p>
         </div>
-        <div class="ph-right"><span class="pill">{{ litCount }}/{{ totalNodes }} 点亮</span></div>
+        <div class="ph-right"><span class="pill">已点亮 {{ litCount }} 个，共 {{ totalNodes }} 个</span></div>
       </header>
 
       <div class="kst-counts">
@@ -20,14 +20,14 @@
       <div class="kst-search">
         <SIcon name="search" :size="15" color="#70869B" />
         <input v-model="q" class="kst-input"
-          placeholder="输入节点名检索，如：免签240小时产品设计 / 外卡支付 / 客诉处理"
+          placeholder="输入节点名检索，如：免签240小时产品设计、外卡支付、客诉处理"
           @keyup.enter="doSearch" />
         <el-button size="small" type="primary" :loading="searching" @click="doSearch">检索</el-button>
       </div>
       <div v-if="results.length" class="kst-results">
         <div v-for="r in results" :key="r.id" class="rs-item" @click="expandTo(r)">
           <SIcon name="link" :size="12" color="#338FF2" />
-          <span class="rs-path">{{ r.path.slice(1).join(' / ') }}</span>
+          <span class="rs-path">{{ r.path.slice(1).join('、') }}</span>
           <span class="rs-cnt">{{ r.skills.length }} 技能点</span>
         </div>
       </div>
@@ -38,7 +38,7 @@
           <path v-for="(b, i) in tree" :key="'ovl-' + b.id" :d="`M 50 10 C 50 30, ${ovPos(i).x} ${ovPos(i).y - 14}, ${ovPos(i).x} ${ovPos(i).y}`"
             class="ov-line" :class="{ on: activeDomain && activeDomain.id === b.id }" />
         </svg>
-        <div class="ov-core"><SIcon name="globe" :size="15" color="#FFFFFF" /><span>知识技能树</span></div>
+        <div class="ov-core"><SIcon name="globe" :size="15" color="#FFFFFF" /><span>知识学习</span></div>
         <button v-for="(b, i) in tree" :key="'ovn-' + b.id" class="ov-branch"
           :class="{ on: activeDomain && activeDomain.id === b.id }"
           :style="{ left: ovPos(i).x + '%', top: ovPos(i).y + '%' }" @click="selectDomain(b)">
@@ -53,7 +53,7 @@
         <div class="sub-head">
           <span class="sub-ic"><SIcon :name="iconOf(activeDomain.type)" :size="15" /></span>
           <h3 class="sub-title">{{ activeDomain.name }}</h3>
-          <span class="sub-meta">{{ domainLit }} · {{ activeDomain.linked_count }} 关联技能点</span>
+          <span class="sub-meta">{{ domainLit }}   {{ activeDomain.linked_count }} 关联技能点</span>
         </div>
         <div class="sub-canvas" ref="canvasRef" :class="{ panning }"
           @mousedown="onCanvasDown" @mousemove.prevent="onCanvasMove" @mouseup="onCanvasUp" @mouseleave="onCanvasUp">
@@ -98,7 +98,7 @@
         </div>
         <div class="sd-title-row">
           <span class="sd-ic"><SIcon :name="iconOf(selV.node.type)" :size="18" /></span>
-          <h3 class="sd-title">{{ domainName }} · {{ selV.node.name }}</h3>
+          <h3 class="sd-title">{{ domainName }}   {{ selV.node.name }}</h3>
         </div>
         <p class="sd-desc">{{ typeDesc(selV.node) }}</p>
 
@@ -116,7 +116,7 @@
         <div v-if="selV.node.mastery_detail" class="sd-break">
           <div class="lb"><span>掌握度构成</span><span class="pct">{{ selV.node.mastery_detail.mastery ?? 0 }}%</span></div>
           <div class="br-row"><span>客观题</span><b>{{ selV.node.mastery_detail.objective ?? 0 }}%</b>
-            <em v-if="selV.node.mastery_detail.objective_total">（{{ selV.node.mastery_detail.objective_done ?? 0 }}/{{ selV.node.mastery_detail.objective_total }} 题）</em></div>
+            <em v-if="selV.node.mastery_detail.objective_total">（已完成 {{ selV.node.mastery_detail.objective_done ?? 0 }} 题，共 {{ selV.node.mastery_detail.objective_total }} 题）</em></div>
           <div class="br-row"><span>管家评估</span><b>{{ selV.node.mastery_detail.concierge ?? 0 }}%</b></div>
           <div class="br-row"><span>沙盒实战</span><b>{{ selV.node.mastery_detail.sandbox ?? 0 }}%</b></div>
         </div>
@@ -276,7 +276,7 @@ const qCount = computed(() => {
 })
 const typeDesc = (n: KSTNode) => {
   const t = { book: '知识域', part: '分组', chapter: '维度', section: '主题', skill: '技能点' }[n.type] || '节点'
-  return `${t} · ${n.linked_count} 个关联技能点`
+  return `${t}   ${n.linked_count} 个关联技能点`
 }
 
 onMounted(load)
@@ -289,7 +289,7 @@ async function load() {
     counts.value = res.counts ?? counts.value
     if (tree.value.length) selectDomain(tree.value[0])
   } catch {
-    ElMessage.error('知识技能树加载失败，请确认后端已启动')
+    ElMessage.error('知识学习加载失败，请确认后端已启动')
   } finally {
     loading.value = false
   }
@@ -321,7 +321,7 @@ async function doSearch() {
   try {
     const res = await treeSearch(query)
     results.value = res.results ?? []
-    if (!results.value.length) ElMessage.info('未命中知识库节点，可尝试输入主题/章节名')
+    if (!results.value.length) ElMessage.info('未命中知识库节点，可尝试输入主题、章节名')
   } catch {
     ElMessage.error('检索失败')
   } finally {
@@ -373,23 +373,23 @@ $BOX_H: 34px;
 
 .kst-page { height: 100%; overflow-y: auto; }
 .kst-inner { max-width: 1080px; margin: 0 auto; padding: 28px 32px 40px; }
-.ph-title { font-family: $font-serif; font-size: 19px; font-weight: 700; color: $color-primary; }
+.ph-title { font-family: $font-serif; font-size: 19px; font-weight: 700; color: $color-text-link; }
 .ph-desc { margin-top: 6px; font-size: 12.5px; color: $color-text-secondary; }
 .ph { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
-.pill { background: $color-accent-light; color: $color-primary; font-size: 12px; padding: 4px 12px; border-radius: 999px; }
+.pill { background: $color-accent-light; color: $color-text-link; font-size: 12px; padding: 4px 12px; border-radius: 999px; }
 
 .kst-counts { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
 .kst-counts .c { background: $color-surface; border: 1px solid $color-border; border-radius: 10px; padding: 8px 14px; display: flex; align-items: baseline; gap: 6px; }
-.kst-counts .c b { font-size: 19px; color: $color-primary; }
+.kst-counts .c b { font-size: 19px; color: $color-text-link; }
 .kst-counts .c span { font-size: 12px; color: $color-text-secondary; }
 
 .kst-search { display: flex; align-items: center; gap: 8px; background: $color-surface; border: 1px solid $color-border; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
 .kst-input { flex: 1; border: none; outline: none; font-size: 13.5px; background: transparent; }
 .kst-results { background: $color-secondary-bg; border: 1px solid $color-border; border-radius: 10px; padding: 8px 12px; margin-bottom: 14px; }
-.rs-item { display: flex; align-items: center; gap: 6px; padding: 6px 0; cursor: pointer; font-size: 12.5px; color: $color-primary; }
+.rs-item { display: flex; align-items: center; gap: 6px; padding: 6px 0; cursor: pointer; font-size: 12.5px; color: $color-text-link; }
 .rs-item + .rs-item { border-top: 1px dashed $color-border; }
 .rs-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rs-cnt { color: $color-accent-d10; font-size: 12px; }
+.rs-cnt { color: $color-text-link; font-size: 12px; }
 
 /* ── 总览 ── */
 .ov-tree { position: relative; background: $color-surface; border: 1px solid $color-border; border-radius: $radius-lg; padding: 18px; margin-bottom: 16px; height: 230px; }
@@ -399,15 +399,15 @@ $BOX_H: 34px;
 .ov-core { position: absolute; left: 50%; top: 10%; transform: translate(-50%, -50%); background: $color-primary; color: #fff; display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px; font-size: 12.5px; box-shadow: $shadow-card; z-index: 1; white-space: nowrap; }
 .ov-branch { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 6px; background: $color-surface; border: 1px solid $color-border; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 12.5px; color: $color-text; box-shadow: $shadow-card; transition: all .15s; z-index: 1; white-space: nowrap; }
 .ov-branch:hover { border-color: $color-accent; }
-.ov-branch.on { border-color: $color-accent; background: #E4F0FC; color: $color-primary; font-weight: 600; }
-.ob-ic { color: $color-accent; display: inline-flex; }
+.ov-branch.on { border-color: $color-accent; background: #E4F0FC; color: $color-text-link; font-weight: 600; }
+.ob-ic { color: $color-text-link; display: inline-flex; }
 .ov-hint { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-size: 11px; color: $color-text-secondary; display: flex; align-items: center; gap: 4px; z-index: 1; white-space: nowrap; }
 
 /* ── 展开域：整齐树 ── */
 .sub-tree { background: $color-surface; border: 1px solid $color-border; border-radius: $radius-lg; overflow: hidden; }
 .sub-head { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid $color-border; }
-.sub-ic { color: $color-accent; display: inline-flex; }
-.sub-title { font-family: $font-serif; font-size: 16px; color: $color-primary; margin: 0; }
+.sub-ic { color: $color-text-link; display: inline-flex; }
+.sub-title { font-family: $font-serif; font-size: 16px; color: $color-text-link; margin: 0; }
 .sub-meta { margin-left: auto; font-size: 12px; color: $color-text-secondary; }
 .sub-canvas { position: relative; overflow: auto; max-height: 640px; cursor: grab; user-select: none; }
 .sub-canvas.panning { cursor: grabbing; }
@@ -419,10 +419,10 @@ $BOX_H: 34px;
 .sb-node:hover { border-color: $color-accent; }
 .sb-node.lit { border-color: rgba(51,143,242,.55); background: #F3F8FE; }
 .sb-node.sel { border-color: $color-accent; background: #E4F0FC; }
-.sb-node.book .sn-name { font-weight: 700; color: $color-primary; }
+.sb-node.book .sn-name { font-weight: 700; color: $color-text-link; }
 .sb-node.part .sn-name { font-weight: 600; }
 .sn-status { display: inline-flex; flex-shrink: 0; }
-.sn-ic { color: $color-accent; display: inline-flex; flex-shrink: 0; }
+.sn-ic { color: $color-text-link; display: inline-flex; flex-shrink: 0; }
 .sn-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sn-exp { display: inline-flex; color: $color-text-secondary; flex-shrink: 0; }
 .sub-legend { display: flex; gap: 16px; padding: 10px 18px; border-top: 1px solid $color-border; font-size: 11.5px; color: $color-text-secondary; }
@@ -437,23 +437,23 @@ $BOX_H: 34px;
 .st-drawer.open { transform: translateX(0); }
 .sd-head { display: flex; align-items: center; justify-content: space-between; }
 .sd-badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; }
-.sd-badge.on { background: $color-accent-light; color: $color-primary; }
+.sd-badge.on { background: $color-accent-light; color: $color-text-link; }
 .sd-badge.off { background: $color-secondary-bg; color: $color-text-secondary; }
 .sd-x { border: none; background: none; cursor: pointer; color: $color-text-secondary; display: inline-flex; }
 .sd-title-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-.sd-ic { color: $color-accent; display: inline-flex; }
-.sd-title { font-family: $font-serif; font-size: 16px; color: $color-primary; margin: 0; }
+.sd-ic { color: $color-text-link; display: inline-flex; }
+.sd-title { font-family: $font-serif; font-size: 16px; color: $color-text-link; margin: 0; }
 .sd-desc { font-size: 12.5px; color: $color-text-secondary; line-height: 1.7; margin: 10px 0 16px; }
 .sd-stats { display: flex; gap: 8px; }
 .sd-stats .st { flex: 1; background: $color-secondary-bg; border-radius: 10px; padding: 10px 6px; text-align: center; }
-.sd-stats .v { display: block; font-size: 17px; font-weight: 700; color: $color-primary; }
+.sd-stats .v { display: block; font-size: 17px; font-weight: 700; color: $color-text-link; }
 .sd-stats .k { display: block; font-size: 11px; color: $color-text-secondary; margin-top: 3px; }
 .sd-prog { margin-top: 18px; }
 .sd-prog .lb { display: flex; justify-content: space-between; font-size: 12px; color: $color-text-secondary; }
-.sd-prog .pct { color: $color-accent-d10; font-weight: 700; }
+.sd-prog .pct { color: $color-text-link; font-weight: 700; }
 .sd-prog .bar { height: 8px; background: $color-secondary-bg; border-radius: 999px; margin-top: 6px; overflow: hidden; }
 .sd-prog .fill { height: 100%; background: linear-gradient(90deg, $color-accent, $color-accent-d10); border-radius: 999px; }
-.sd-reason { margin-top: 16px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: $color-primary; background: $color-accent-light; border-radius: 10px; padding: 10px 12px; }
+.sd-reason { margin-top: 16px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: $color-text-link; background: $color-accent-light; border-radius: 10px; padding: 10px 12px; }
 .sd-pending { margin-top: 16px; display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; color: $color-text-secondary; background: $color-secondary-bg; border-radius: 10px; padding: 10px 12px; line-height: 1.6; }
 .sd-learn { margin-top: 18px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; background: $color-primary; color: #fff; border: none; border-radius: 10px; padding: 12px; font-size: 13.5px; cursor: pointer; transition: background .15s; }
 .sd-learn:hover { background: $color-primary-light; }
@@ -467,25 +467,25 @@ $BOX_H: 34px;
 }
 .sb-node.lit .sn-fill { background: linear-gradient(90deg, #338FF2, #f0cf8a); }
 .sn-fill-tag {
-  position: absolute; right: 4px; bottom: 3px; font-size: 9px; color: #7a5af8;
+  position: absolute; right: 4px; bottom: 3px; font-size: 9px; color: #684dd3;
   font-weight: 700; pointer-events: none; opacity: .9;
 }
-.sb-node.lit .sn-fill-tag { color: #b26a00; }
+.sb-node.lit .sn-fill-tag { color: #925700; }
 .dot.mid { background: linear-gradient(135deg,#2f6fae,#7a5af8); }
 .dot.low { background: rgba(122,90,248,.35); }
 .sd-break {
   margin-top: 12px; background:#f4f8fd; border:1px solid #dfe9f5;
   border-radius:10px; padding:10px 12px;
 }
-.sd-break .br-row { display:flex; align-items:baseline; gap:8px; font-size:12px; color:#338FF2; margin-top:4px; }
+.sd-break .br-row { display:flex; align-items:baseline; gap:8px; font-size:12px; color:$color-text-link; margin-top:4px; }
 .sd-break .br-row b { margin-left:auto; color:#2f6fae; }
-.sd-break .br-row em { color:#90a4b8; font-style:normal; }
+.sd-break .br-row em { color:$color-text-secondary; font-style:normal; }
 
 
 /* ── 节点=掌握度进度框：藏蓝文字 + 淡金按%填充 ── */
-.sb-node { color:#338FF2; }
-.sb-node .sn-name { color:#338FF2; }
-.sn-pct { margin-left:auto; font-size:10px; font-weight:700; color:#338FF2; padding-left:6px; flex:0 0 auto; }
+.sb-node { color:$color-text-link; }
+.sb-node .sn-name { color:$color-text-link; }
+.sn-pct { margin-left:auto; font-size:10px; font-weight:700; color:$color-text-link; padding-left:6px; flex:0 0 auto; }
 /* 图例点：不透明区分（无透明度渐变） */
 .dot.mid { background:#7a5af8; }
 .dot.low { background:#c8d0df; }

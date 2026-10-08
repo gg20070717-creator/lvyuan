@@ -177,9 +177,9 @@ onUnmounted(() => {
 .lt-btn.primary { background: linear-gradient(135deg, #338FF2, #b28c46); color: #fff; border: 0; }
 .lt-btn.small { font-size: 11.5px; }
 .lt-btn:disabled { opacity: .55; cursor: not-allowed; }
-.lt-x { margin-left: auto; border: 0; background: none; color: #aaa; cursor: pointer; }
-.lt-err { color: #c0504d; font-size: 12px; margin-top: 6px; }
-.lt-warn { color: #b28c46; font-size: 12px; margin-top: 6px; }
+.lt-x { margin-left: auto; border: 0; background: none; color: #42586e; cursor: pointer; }
+.lt-err { color: #a74543; font-size: 12px; margin-top: 6px; }
+.lt-warn { color: #7b6131; font-size: 12px; margin-top: 6px; }
 .lt-out { margin-top: 8px; border-top: 1px dashed #DCEAF7; padding-top: 8px; }
 .lt-txt { font-size: 13px; color: #333; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .lt-md { font-size: 13px; }

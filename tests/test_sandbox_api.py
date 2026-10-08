@@ -42,7 +42,7 @@ def test_sandbox_templates_api(tmp_path):
     assert resp.status_code == 200
     templates = resp.json()["templates"]
     assert len(templates) >= 7
-    assert {t["mode"] for t in templates} == {"scenario", "narrate", "fullflow"}
+    assert {t["mode"] for t in templates} == {"scenario", "narrate", "fullflow", "communication"}
 
     scenario = client.get("/sandbox/templates", params={"mode": "scenario"}).json()["templates"]
     assert all(t["mode"] == "scenario" for t in scenario)

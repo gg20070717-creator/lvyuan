@@ -5,7 +5,7 @@
       <!-- 品牌徽章 -->
       <div class="badge">
         <span class="badge-dot" />
-        <span>以中国为课堂 · 以真实旅行为实践</span>
+        <span>以中国为课堂   以真实旅行为实践</span>
       </div>
 
       <!-- Logo 图标（官方 SVG 图形部分，viewBox 与官方一致） -->
@@ -66,7 +66,7 @@
       </div>
 
       <!-- 版权 -->
-      <p class="copyright">© 2026 旅鸢 · 中国入境游旅行定制师多智能体协同实训平台</p>
+      <p class="copyright">© 2026 旅鸢   中国入境游旅行定制师多智能体协同实训平台</p>
     </div>
   </div>
 </template>
@@ -156,7 +156,7 @@ const stats = [
   span {
     font-size: 13px;
     font-weight: 500;
-    color: $color-accent;
+    color: $color-text-link;
   }
 }
 
@@ -178,7 +178,7 @@ const stats = [
   font-family: $font-serif;
   font-size: 48px;
   font-weight: 700;
-  color: $color-primary;
+  color: $color-text-link;
   margin-bottom: 12px;
   text-align: center;
   letter-spacing: 6px;
@@ -188,7 +188,7 @@ const stats = [
   font-family: $font-serif;
   font-size: 22px;
   font-weight: 500;
-  color: $color-accent;
+  color: $color-text-link;
   margin-bottom: 12px;
   text-align: center;
 }
@@ -251,7 +251,7 @@ const stats = [
   .og-tip {
     margin-top: 4px;
     font-size: 12px;
-    color: $color-accent;
+    color: $color-text-link;
     text-align: center;
   }
 }
@@ -321,7 +321,7 @@ const stats = [
 
   .stat-icon {
     font-size: 20px;
-    color: $color-accent;
+    color: $color-text-link;
   }
 }
 
@@ -329,7 +329,7 @@ const stats = [
   font-family: $font-serif;
   font-size: 26px;
   font-weight: 700;
-  color: $color-primary;
+  color: $color-text-link;
 }
 
 .stat-label {
@@ -406,12 +406,12 @@ const stats = [
 .hero-logo img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
 .welcome-page { background: #f7fbff; }
 .welcome-content { padding-top: 36px; }
-.hero-title { color: #338ff2; font-size: 44px; font-weight: 600; margin-bottom: 14px; }
+.hero-title { color: $color-text-link; font-size: 44px; font-weight: 600; margin-bottom: 14px; }
 .hero-slogan { color: #2a5278; letter-spacing: 2px; font-size: 25px; }
 .hero-desc { letter-spacing: 1px; font-size: 13px; }
 .badge { background: #eef6ff; border-color: #d8e9fb; }
 .onboard-guide { background: rgba(255,255,255,.85); border: 1px solid #dceaf7; border-radius: 22px 6px 22px 6px; gap: 16px; }
 .stats-inner { background: rgba(255,255,255,.7); border: 1px solid #deebf8; border-radius: 22px 6px 22px 6px; box-shadow: none; }
 .stat-icon-box { background: #eef6ff; border-color: #deebf8; }
-.copyright { color: #8da2b6; }
+.copyright { color: $color-text-secondary; }
 </style>

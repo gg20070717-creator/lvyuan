@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { AxiosInstance } from 'axios'
+import { cleanDisplayPayload } from '@/utils/displayText'
 
 // ── 后端地址配置 ──
 // 开发模式：Vite 代理 /api → http://127.0.0.1:18000（rewrite 去 /api 前缀）
@@ -50,7 +51,7 @@ export function classifyError(error: any): ApiError {
   if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
     return {
       type: ApiErrorType.NETWORK,
-      message: '后端未连接 — 请确认 API 服务已启动 (http://127.0.0.1:18000)',
+      message: '后端未连接 — 请确认 API 服务已启动 （本机 18000 端口）',
       originalError: error,
     }
   }
@@ -71,7 +72,7 @@ export function classifyError(error: any): ApiError {
 
 // ── 响应拦截器 ──
 client.interceptors.response.use(
-  (response) => response.data,
+  (response) => cleanDisplayPayload(response.data),
   (error) => {
     const classified = classifyError(error)
     if (classified.type === ApiErrorType.NETWORK) {

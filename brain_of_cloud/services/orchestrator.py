@@ -66,6 +66,7 @@ from brain_of_cloud.services.agents.concierge import AgentResponse, ConciergeAge
 from brain_of_cloud.services.onboarding import IDENTITY_QUESTIONS as _IDQ
 from brain_of_cloud.services.agents.essay_question import EssayQuestionAgent
 from brain_of_cloud.services.assets import AssetService
+from brain_of_cloud.services.agent_catalog import ALIASES, trace_event
 from brain_of_cloud.services.context import ConversationContextManager
 from brain_of_cloud.services.memory import UserMemoryService
 from brain_of_cloud.services.teaching import TeachingStateService
@@ -214,19 +215,14 @@ class Orchestrator:
         role: str,
         status: str = "working",
         detail: str = "",
+        **meta,
     ) -> None:
         """上报一条实时 Agent 工作轨迹（前端「多智能体协同」面板直播用，基于真实执行轨迹）。"""
         cb = self._trace_cb_ctx.get()
         if cb is None:
             return
         try:
-            cb({
-                "agent": agent,
-                "name": name,
-                "role": role,
-                "status": status,
-                "detail": (detail or "")[:180],
-            })
+            trace_event(cb, agent, role, status, detail or "", **meta)
         except Exception:
             pass
 
@@ -600,6 +596,8 @@ class Orchestrator:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {}
             for aid, h in hats:
+                hm = self._HAT_TRACE[aid]
+                self._emit_trace(*hm, "working", step="collaboration")
                 kwargs = dict(training_content=content, learner_profile=profile)
                 if aid == AgentId.RED_HAT:
                     kwargs["teaching_context"] = teaching_context
@@ -622,8 +620,11 @@ class Orchestrator:
                         _hd = f"不通过：{_txt[:140]}" if _txt else "不通过"
                     elif _txt:
                         _hd = f"审查意见：{_txt[:140]}"
-                    self._emit_trace(_hm[0], _hm[1], _hm[2], "done", detail=_hd)
+                    self._emit_trace(_hm[0], _hm[1], _hm[2],
+                                     "failed" if _txt.startswith("error:") else "done",
+                                     detail=_hd, step="collaboration")
 
+        self._emit_trace("blue_hat", "蓝帽 · 裁决", "汇总五帽意见", "working", step="collaboration")
         review = self._blue_hat.coordinate(content, hat_results)
         verdict = "passed" if "合格" in review else "needs_revision"
         _blue_txt = str(review or "").strip().replace("\n", " ").strip()
@@ -1359,7 +1360,24 @@ class Orchestrator:
                     )
                     break
                 conversation = self._sanitize_conversation(conversation)  # 防 400：保证 tool 消息紧跟 assistant(tool_calls)
+                self._emit_trace("concierge", "旅鸢管家", "判断下一步分工", "working",
+                                 step="planning", round=_i + 1, run_id=f"plan:{_i + 1}")
                 response = self._concierge.think(conversation, self._tools.get_definitions())
+                selected = []
+                for raw in response.tool_calls or []:
+                    if raw["name"] == "review_material":
+                        ids = [a.value for a in self._HAT_TRACE] + ["blue_hat"]
+                    else:
+                        tm = self._TOOL_TRACE.get(raw["name"])
+                        ids = [ALIASES.get(tm[0], tm[0])] if tm else []
+                    for aid in ids:
+                        if aid not in selected:
+                            selected.append(aid)
+                self._emit_trace("concierge", "旅鸢管家", "分工已确定", "done",
+                                 step="dispatch", event="dispatch", round=_i + 1,
+                                 agents=selected, tools=[t["name"] for t in response.tool_calls or []],
+                                 run_id=f"plan:{_i + 1}",
+                                 detail=f"本轮调度 {len(selected)} 个角色" if selected else "本轮由管家直接组织回复")
                 _iter_tools = [t["name"] for t in (response.tool_calls or [])]
                 print(
                     f"[ORCH] iter={_i} t={_time.time()-_loop_t0:.0f}s tools={_iter_tools} "
@@ -1399,7 +1417,7 @@ class Orchestrator:
                         _tr_meta = self._TOOL_TRACE.get(tc.name)
                         if _tr_meta:
                             self._emit_trace(_tr_meta[0], _tr_meta[1], _tr_meta[2], "working",
-                                             detail=self._tool_work_note(tc))
+                                             detail=self._tool_work_note(tc), step="collaboration", run_id=tc.id)
                         # 群组空间审计：工具调用 → agent_run（差距项 T5）
                         run = self._agent_run_for_tool(task.task_id, input_message.message_id, tc.name)
                         # ── 纠错闭环锁：reteach 未解除前，禁止执行换题/出新题工具（工具层拦截，不插消息防400）──
@@ -1440,6 +1458,7 @@ class Orchestrator:
                             self._emit_trace(
                                 _tr_meta[0], _tr_meta[1], _tr_meta[2],
                                 "failed" if _tr_fail else "done",
+                                step="collaboration", run_id=tc.id,
                             )
                         if run is not None:
                             try:
@@ -1529,6 +1548,10 @@ class Orchestrator:
                                     if gen_content and "review_material" not in tools_called \
                                             and "review_material" not in _iter_tools:
                                         _report("reviewing")
+                                        self._emit_trace("concierge", "旅鸢管家", "追加质量检查分工", "done",
+                                                         step="dispatch", event="dispatch", source="policy", round=_i + 1,
+                                                         agents=[aid.value for aid in self._HAT_TRACE] + ["blue_hat"],
+                                                         tools=["review_material"], detail="资产生成后按质量检查规则追加六帽审查")
                                         review_result = self._handle_review_material(gen_content)
                                         rv2 = json.loads(review_result)
                                         review_verdict = rv2.get("verdict", "")
@@ -1888,7 +1911,7 @@ class Orchestrator:
         # 规则提取学员长期记忆
         self._memory.extract_from_message(user_id, session_id, content)
         # ── 多 Agent 实时轨迹：司南汇总交付 ──
-        self._emit_trace("concierge", "司南管家", "汇总各 Agent 成果", "done", detail="组织最终回复交付给你")
+        self._emit_trace("concierge", "旅鸢管家", "汇总各 Agent 成果", "done", detail="组织最终回复交付给你", step="delivery")
 
         completed = self._store.update_task_status(task.task_id, TaskStatus.COMPLETED)
         return OrchestratorResult(
@@ -2194,9 +2217,14 @@ class Orchestrator:
         """答对收口（纠错解除 / 重复答对）后，由程序直接抽下一道新题（前端卡片展示）。
         管家只写 1-2 句衔接语，不展示题目、不再出题。"""
         try:
+            self._emit_trace("concierge", "旅鸢管家", "答题闭环追加分工", "done", step="dispatch", event="dispatch",
+                             source="policy", agents=["training_analyzer"], tools=["quiz_user"], detail="答对后按教学规则抽取下一道新题")
+            self._emit_trace("training_analyzer", "测评分析师", "抽取下一道新题", "working", step="collaboration")
             nq = json.loads(self._handle_quiz_user())
+            self._emit_trace("training_analyzer", "测评分析师", "题库抽题完成", "done", step="collaboration")
         except Exception:
             nq = {}
+            self._emit_trace("training_analyzer", "测评分析师", "自动抽题失败", "failed", step="collaboration")
         if nq.get("question_id"):
             conversation.append({
                 "role": "system",

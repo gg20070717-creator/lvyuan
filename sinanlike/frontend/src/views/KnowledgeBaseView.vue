@@ -15,10 +15,13 @@
       </header>
 
       <!-- ══ 文件资产画廊 ══ -->
+      <div class="resource-stats">
+        <button v-for="item in resourceGroups" :key="item.key" @click="assetCat = item.key"><SIcon :name="item.icon" :size="22" /><span><b>{{ assets.filter(a => a.asset_type === item.key).length }}</b><small>{{ item.label }}</small></span></button>
+      </div>
       <section class="kb-section">
         <div class="sec-head">
           <h3 class="sec-title">生成的文件</h3>
-          <span class="sec-sub">对话中生成的讲义 / 计划 / 报告会自动归集到这里</span>
+          <span class="sec-sub">对话中生成的讲义、计划、报告会自动归集到这里</span>
         </div>
 
         <div class="kb-cats">
@@ -34,7 +37,8 @@
         <div v-if="filteredAssets.length" class="kb-grid">
           <div v-for="a in filteredAssets" :key="a.asset_id" class="kb-card" @click="openAsset(a)">
             <div class="kb-thumb" :style="thumbStyle(a)">
-              <span class="thumb-emoji">{{ typeMeta(a.asset_type).emoji }}</span>
+              <span class="resource-thumb-icon"><SIcon :name="resourceIcon(a.asset_type)" :size="35" /></span>
+              <span class="resource-thumb-sketch" aria-hidden="true"><i></i><i></i><i></i></span>
               <span class="badge">{{ typeMeta(a.asset_type).label }}</span>
             </div>
             <div class="kb-card-body">
@@ -56,7 +60,7 @@
       <section class="kb-section">
         <div class="sec-head">
           <h3 class="sec-title">知识检索</h3>
-          <span class="sec-sub">7 大领域 / 3796 个技能点 / 30944 道题</span>
+          <span class="sec-sub">7 大领域、3796 个技能点、30944 道题</span>
         </div>
 
         <div class="kb-search">
@@ -73,7 +77,7 @@
                 <span class="diff-badge">★{{ hit.difficulty }}</span>
               </div>
               <p class="skill-source">{{ hit.source }}</p>
-              <p class="skill-preview">{{ hit.content.slice(0, 90) }}…</p>
+              <p class="skill-preview">{{ display(hit.content.slice(0, 90)) }}…</p>
             </div>
           </div>
           <p v-else class="empty-hint">没有找到匹配的技能点，换个关键词试试。</p>
@@ -91,7 +95,7 @@
               <span v-for="c in detail.categories" :key="c" class="tag tag-cat">{{ c }}</span>
             </div>
           </div>
-          <div class="detail-content">{{ detail.content }}</div>
+          <div class="detail-content">{{ display(detail.content) }}</div>
 
           <template v-if="detail.keywords.length">
             <div class="detail-section-title">关键词</div>
@@ -126,7 +130,7 @@
       <section class="kb-section">
         <div class="sec-head">
           <h3 class="sec-title">官方课本</h3>
-          <span class="sec-sub">4 本官方教材 · 章节掌握度来自你的答题记录</span>
+          <span class="sec-sub">4 本官方教材   章节掌握度来自你的答题记录</span>
         </div>
 
         <div class="kb-search">
@@ -144,7 +148,7 @@
             <div v-for="c in g.chapters" :key="c.id" class="bk-card" @click="openChapter(c)">
               <div class="bk-card-head">
                 <span class="bk-lv">{{ c.skillCount }} 技能点</span>
-                <span class="bk-ct">{{ c.questionCount }} 真题 · {{ c.sectionCount }} 节</span>
+                <span class="bk-ct">{{ c.questionCount }} 真题   {{ c.sectionCount }} 节</span>
               </div>
               <div class="bk-title">{{ c.title }}</div>
               <div class="bk-prog">
@@ -171,7 +175,7 @@
             <button class="cd-close" @click="closeChapter"><SIcon name="x" :size="13" /></button>
           </div>
           <div class="cd-body">
-            <div class="cd-path">{{ chapterDetail.partTitle ? chapterDetail.bookTitle + ' · ' + chapterDetail.partTitle : chapterDetail.bookTitle }}</div>
+            <div class="cd-path">{{ chapterDetail.partTitle ? chapterDetail.bookTitle + '   ' + chapterDetail.partTitle : chapterDetail.bookTitle }}</div>
             <div class="cd-stats">
               <div class="st"><span class="v">{{ chapterDetail.skillCount }}</span><span class="k">技能点</span></div>
               <div class="st"><span class="v">{{ chapterDetail.questionCount }}</span><span class="k">真题</span></div>
@@ -212,7 +216,7 @@
             <span class="tag">难度 {{ skillDetail.difficulty }}</span>
             <span v-for="cat in skillDetail.categories" :key="cat" class="tag tag-cat">{{ cat }}</span>
           </div>
-          <div class="sd-content">{{ skillDetail.content }}</div>
+          <div class="sd-content">{{ display(skillDetail.content) }}</div>
           <div class="sd-actions">
             <el-button text type="primary" size="small" @click="exportSkillMarkdown">
               <SIcon name="filetext" :size="13" /> 导出 Markdown
@@ -259,14 +263,14 @@
           <span><SIcon name="sparkle" :size="11" />{{ sourceLabel(drawerDoc.source_tool) }}</span>
           <span><SIcon name="clock" :size="11" />{{ formatTime(drawerDoc.created_at) }}</span>
         </div>
-        <MarkdownViewer class="kbd-content" :content="drawerDoc.content || ''" />
+        <ResourceOverview class="kbd-content" :content="drawerDoc.content || ''" :type="drawerDoc.asset_type" />
         <LearnTranslate v-if="drawerDoc.content && drawerDoc.content.trim()" :text="drawerDoc.content" mode="markdown" render-markdown />
         <div class="kbd-actions">
           <button class="kbd-btn primary" @click="exportAsset(drawerDoc)">
             <SIcon name="filetext" :size="13" color="#fff" /> 导出为 Markdown
           </button>
           <button class="kbd-btn" @click="printAsset(drawerDoc)">
-            <SIcon name="filetext" :size="13" /> 打印 / 存为 PDF
+            <SIcon name="filetext" :size="13" /> 打印、存为 PDF
           </button>
           <button class="kbd-btn danger" @click="removeAsset(drawerDoc)">
             <SIcon name="x" :size="13" /> 删除
@@ -279,10 +283,12 @@
 
 <script setup lang="ts">
 import { computed, onActivated, onMounted, onUnmounted, ref, watch } from 'vue'
+import { cleanDisplayText as display } from '@/utils/displayText'
 import { WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import SIcon from '@/components/SIcon.vue'
 import MarkdownViewer from '@/components/MarkdownViewer.vue'
+import ResourceOverview from '@/components/ResourceOverview.vue'
 import LearnTranslate from '@/components/LearnTranslate.vue'
 import { deleteAsset, getAsset, listAssets, ASSET_TYPE_META } from '@/api/assets'
 import type { AssetItem } from '@/api/assets'
@@ -293,6 +299,8 @@ import { classifyError } from '@/api/client'
 import { useAppStore } from '@/stores/app'
 
 const store = useAppStore()
+const resourceGroups = [ { key:'lecture',label:'知识讲义',icon:'book' },{ key:'practice_guide',label:'实操指南',icon:'target' },{ key:'plan',label:'学习计划',icon:'map' },{ key:'report',label:'学习报告',icon:'bookcheck' } ]
+function resourceIcon(type:string) { return resourceGroups.find(item => item.key === type)?.icon || (type === 'wrong_book' ? 'shield' : 'filetext') }
 
 // ── 官方课本（学习中心迁移：4 本教材 → 章节 → 技能点） ──
 interface SkillRow {
@@ -511,7 +519,7 @@ const filteredAssets = computed(() => {
 })
 
 const assetEmptyDesc = computed(() =>
-  store.backendOnline ? '在对话中让 AI 生成讲义/计划/报告，它们会自动出现在这里' : '后端未连接，无法加载文件资产',
+  store.backendOnline ? '在对话中让 AI 生成讲义、计划、报告，它们会自动出现在这里' : '后端未连接，无法加载文件资产',
 )
 
 function typeMeta(t: string) {
@@ -543,7 +551,7 @@ function thumbStyle(a: AssetItem) {
 
 function typeBadgeStyle(t: string) {
   const meta = typeMeta(t)
-  return { color: meta.color, background: `${meta.color}1a`, border: `1px solid ${meta.color}33` }
+  return { color: '#1d5e99', background: `${meta.color}1a`, border: `1px solid ${meta.color}33` }
 }
 
 async function loadData() {
@@ -602,14 +610,14 @@ function printAsset(a: AssetItem) {
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${a.title}</title>
     <style>
       body { font-family: "Microsoft YaHei", sans-serif; max-width: 720px; margin: 32px auto; padding: 0 24px; color: #222; line-height: 1.8; }
-      h1 { color: #338FF2; border-bottom: 2px solid #338FF2; padding-bottom: 8px; }
-      .meta { color: #888; font-size: 13px; margin-bottom: 24px; }
+      h1 { color: #1d5e99; border-bottom: 2px solid #338FF2; padding-bottom: 8px; }
+      .meta { color: #42586e; font-size: 13px; margin-bottom: 24px; }
       pre { background: #f6f6f6; padding: 12px; border-radius: 6px; white-space: pre-wrap; }
       blockquote { border-left: 3px solid #338FF2; margin-left: 0; padding-left: 12px; color: #555; }
       @media print { body { margin: 0; } }
     </style></head><body>
     <h1>${a.title}</h1>
-    <div class="meta">旅鸢 · ${sourceLabel(a.source_tool)} · ${formatTime(a.created_at)}</div>
+    <div class="meta">旅鸢   ${sourceLabel(a.source_tool)}   ${formatTime(a.created_at)}</div>
     <div>${(a.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</div>
     <script>window.onload = () => setTimeout(() => window.print(), 300)<\/script>
     </body></html>`)
@@ -706,19 +714,19 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 /* 离线横幅 */
 .backend-offline-banner {
   display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: $radius-md;
-  background: #fef3e2; border: 1px solid #f5d9a0; color: #a06315; font-size: 13px; margin-bottom: 16px;
+  background: #fef3e2; border: 1px solid #f5d9a0; color: #8f5813; font-size: 13px; margin-bottom: 16px;
 }
 
 /* 页头 */
 .ph { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 20px; }
-.ph-title { font-family: $font-serif; font-size: 24px; font-weight: 700; color: $color-primary; }
+.ph-title { font-family: $font-serif; font-size: 24px; font-weight: 700; color: $color-text-link; }
 .pill { font-size: 11.5px; padding: 5px 13px; border-radius: 20px; color: #256CA7;
   background: rgba(51,143,242,.12); border: 1px solid rgba(51,143,242,.3); }
 
 /* 区块头 */
 .kb-section { margin-bottom: 28px; }
 .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
-  .sec-title { font-family: $font-serif; font-size: 17px; font-weight: 700; color: $color-primary; }
+  .sec-title { font-family: $font-serif; font-size: 17px; font-weight: 700; color: $color-text-link; }
   .sec-sub { font-size: 12px; color: $color-text-secondary; } }
 
 /* 分类 pills */
@@ -737,23 +745,23 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .kb-thumb { position: relative; height: 120px; display: flex; align-items: center; justify-content: center;
   .thumb-emoji { font-size: 42px; filter: drop-shadow(0 2px 6px rgba(24,58,99,.18)); }
   .badge { position: absolute; top: 8px; left: 8px; font-size: 10px; padding: 2px 9px; border-radius: 20px;
-    background: rgba(24,58,99,.78); color: $color-accent; font-weight: 600; } }
+    background: rgba(24,58,99,.78); color: $color-text-link; font-weight: 600; } }
 .kb-card-body { padding: 12px 14px;
   .t { font-size: 13.5px; font-weight: 600; color: $color-text; line-height: 1.45;
     overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .kb-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; gap: 8px;
     .src { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: $color-text-secondary;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .cite { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: $color-accent;
+    .cite { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: $color-text-link;
       background: rgba(51, 143, 242, 0.14); padding: 1px 7px; border-radius: 999px; flex-shrink: 0; }
-    .time { font-size: 10px; color: #B5B0A6; flex-shrink: 0; } } }
+    .time { font-size: 10px; color: $color-text-secondary; flex-shrink: 0; } } }
 
 /* 知识搜索 */
 .kb-search { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px;
   background: rgba(255,255,255,.88); border: 1px solid $color-border; margin-bottom: 16px;
   input { flex: 1; border: none; outline: none; background: transparent; font-size: 13px;
     font-family: $font-sans; color: $color-text;
-    &::placeholder { color: #B5B0A6; } } }
+    &::placeholder { color: $color-text-secondary; } } }
 
 .search-body { margin-bottom: 8px; }
 .skill-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
@@ -777,7 +785,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   .tag { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: $color-muted-bg; color: $color-text-secondary; }
   .tag-cat { background: $color-accent-light; color: $color-accent-d15; }
   .detail-content { font-size: 14px; line-height: 1.9; color: $color-text; white-space: pre-wrap; margin-bottom: 20px; }
-  .detail-section-title { font-weight: 600; color: $color-primary; margin: 20px 0 10px; font-size: 14px; }
+  .detail-section-title { font-weight: 600; color: $color-text-link; margin: 20px 0 10px; font-size: 14px; }
   .kw-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
   .kw-tag { margin-right: 0; }
 }
@@ -801,8 +809,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .kbd-close { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
   background: $color-secondary-bg; color: $color-text-secondary; display: flex; align-items: center;
   justify-content: center; transition: all .15s;
-  &:hover { background: $color-border; color: $color-primary; transform: rotate(90deg); } }
-.kbd-title { font-family: $font-serif; font-size: 19px; font-weight: 700; color: $color-primary; line-height: 1.4; }
+  &:hover { background: $color-border; color: $color-text-link; transform: rotate(90deg); } }
+.kbd-title { font-family: $font-serif; font-size: 19px; font-weight: 700; color: $color-text-link; line-height: 1.4; }
 .kbd-meta { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap;
   span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: $color-text-secondary; } }
 .kbd-content { margin-top: 14px;
@@ -813,8 +821,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   display: flex; align-items: center; justify-content: center; gap: 6px; transition: all .18s; font-family: $font-sans;
   &.primary { border: none; color: #fff; background: linear-gradient(135deg, #338FF2, #26507f);
     &:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(24,58,99,.3); } }
-  &.danger { background: #fff; border: 1px solid $color-border; color: #E11D48;
-    &:hover { border-color: rgba(225,29,72,.4); color: #E11D48; background: rgba(225,29,72,.04); } } }
+  &.danger { background: #fff; border: 1px solid $color-border; color: #c5193f;
+    &:hover { border-color: rgba(225,29,72,.4); color: #c5193f; background: rgba(225,29,72,.04); } } }
 
 @media (max-width: 700px) { .kb-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 480px) { .kb-grid { grid-template-columns: 1fr; } }
@@ -822,7 +830,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 // ── 官方课本（自学习中心迁移） ──
 .bk-group { margin-top: 16px; }
 .bk-book-title { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700;
-  color: $color-primary; font-family: $font-serif; margin: 0 0 10px;
+  color: $color-text-link; font-family: $font-serif; margin: 0 0 10px;
   .cnt { font-size: 11px; font-weight: 400; color: $color-text-secondary; } }
 .bk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .bk-card { border: 1px solid $color-border; border-radius: $radius-md; padding: 14px 16px; cursor: pointer;
@@ -831,7 +839,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .bk-card-head { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: $color-text-secondary; }
 .bk-lv { padding: 2px 8px; border-radius: 10px; background: rgba(24,58,99,.06); }
 .bk-ct { font-family: Consolas, monospace; }
-.bk-title { margin: 9px 0 10px; font-size: 13.5px; font-weight: 600; color: $color-primary; line-height: 1.45;
+.bk-title { margin: 9px 0 10px; font-size: 13.5px; font-weight: 600; color: $color-text-link; line-height: 1.45;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bk-prog { display: flex; align-items: center; gap: 8px;
   .track { flex: 1; height: 6px; border-radius: 4px; background: rgba(24,58,99,.08); overflow: hidden;
@@ -841,8 +849,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .bk-act { margin-top: 10px; width: 100%; padding: 6px 0; border-radius: 9px; border: none; font-size: 12px;
   font-weight: 600; cursor: pointer; transition: all .15s;
   &.start { background: rgba(51,143,242,.14); color: #256CA7; &:hover { background: rgba(51,143,242,.22); } }
-  &.cont { background: rgba(24,58,99,.07); color: $color-primary; &:hover { background: rgba(24,58,99,.12); } }
-  &.done { background: rgba(45,138,45,.1); color: #2d8a2d; } }
+  &.cont { background: rgba(24,58,99,.07); color: $color-text-link; &:hover { background: rgba(24,58,99,.12); } }
+  &.done { background: rgba(45,138,45,.1); color: #267326; } }
 .bk-empty { padding: 18px; text-align: center; font-size: 12.5px; color: $color-text-secondary;
   border: 1px dashed $color-border; border-radius: $radius-md; }
 
@@ -863,7 +871,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .cd-path { font-size: 12px; color: $color-text-secondary; }
 .cd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px;
   .st { padding: 10px; border-radius: 12px; background: rgba(24,58,99,.04); text-align: center;
-    .v { display: block; font-size: 17px; font-weight: 700; color: $color-primary; font-family: Consolas, monospace; }
+    .v { display: block; font-size: 17px; font-weight: 700; color: $color-text-link; font-family: Consolas, monospace; }
     .k { font-size: 10.5px; color: $color-text-secondary; } } }
 .cd-prog { margin-top: 16px;
   .lb { display: flex; justify-content: space-between; font-size: 12px; color: $color-text-secondary; margin-bottom: 6px;
@@ -871,7 +879,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   .bar { height: 8px; border-radius: 5px; background: rgba(24,58,99,.08); overflow: hidden;
     .fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #338FF2, #A8893C); } } }
 .cd-lessons { margin-top: 18px;
-  .lb { font-size: 12.5px; font-weight: 700; color: $color-primary; margin-bottom: 8px; } }
+  .lb { font-size: 12.5px; font-weight: 700; color: $color-text-link; margin-bottom: 8px; } }
 .cd-empty-tip { font-size: 12.5px; color: $color-text-secondary; padding: 12px; border: 1px dashed $color-border;
   border-radius: 10px; text-align: center; }
 .cd-sec { margin-bottom: 10px; }
@@ -900,14 +908,18 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   .tag-cat { background: rgba(51,143,242,.12); color: #256CA7; } }
 .sd-content { font-size: 13.5px; line-height: 1.9; color: $color-text; white-space: pre-wrap; }
 .sd-actions { margin: 14px 0; }
-.sd-sec-title { font-size: 13px; font-weight: 700; color: $color-primary; margin: 18px 0 8px; }
+.sd-sec-title { font-size: 13px; font-weight: 700; color: $color-text-link; margin: 18px 0 8px; }
 .sd-kw { display: flex; flex-wrap: wrap; gap: 6px; }
 .sd-q { border: 1px solid $color-border; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
   .q-prompt { font-size: 13.5px; line-height: 1.7; color: $color-text; margin: 0 0 8px; }
   .q-opt { font-size: 12.5px; color: $color-text-secondary; margin: 3px 0; padding-left: 14px; position: relative;
-    &::before { content: '·'; position: absolute; left: 2px; color: #338FF2; } }
+    &::before { content:''; position:absolute; left:2px; top:10px; width:4px; height:4px; border-radius:50%; background:#338FF2; } }
   .q-answer { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(47,143,91,.06);
     font-size: 12.5px; line-height: 1.7;
-    b { color: #2d8a2d; }
+    b { color: #267326; }
     .q-expl { color: $color-text-secondary; margin: 6px 0 0; } } }
+.resource-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; margin:0 0 25px; button { display:flex; align-items:center; gap:13px; text-align:left; background:#fff; border:1px solid #dbe8f5; color:$color-text-link; padding:19px; border-radius:16px 5px 16px 5px; cursor:pointer; span { flex:1; } b { display:block; color:#2a587c; font-size:23px; font-weight:600; } small { display:block; color:$color-text-secondary; font-size:12px; margin-top:5px; } } }
+.resource-thumb-icon { position:absolute; left:24px; top:28px; display:grid; place-items:center; color:$color-text-link; width:60px; height:60px; background:#ffffffa8; border:1px solid #d5e8f8; border-radius:17px; }
+.resource-thumb-sketch { display:flex; flex-direction:column; gap:8px; position:absolute; left:104px; right:26px; top:41px; i { display:block; height:8px; border-radius:3px; background:#8db9dc30; &:nth-child(2) { width:80%; } &:nth-child(3) { width:60%; } } }
+@media(max-width:700px) { .resource-stats { grid-template-columns:1fr 1fr; } }
 </style>

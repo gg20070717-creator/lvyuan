@@ -1,5 +1,7 @@
 /* 对话式沙盒 API 层 — 与后端 /sandbox/* 路由对应 */
 import client from './client'
+import { waitForTask } from './cooperation'
+import type { AgentTrace } from './messages'
 
 export interface SandboxTemplate {
   template_id: string
@@ -139,8 +141,9 @@ export function listSandboxTemplates(mode?: string): Promise<{ templates: Sandbo
   return client.get('/sandbox/templates', { params: mode ? { mode } : {} }) as unknown as Promise<{ templates: SandboxTemplate[] }>
 }
 
-export function createSandboxSession(user_id: string, template_id: string, language?: string, voice?: string): Promise<SandboxSession> {
-  return client.post('/sandbox/sessions', { user_id, template_id, language: language || '', voice: voice || '' }) as unknown as Promise<SandboxSession>
+export async function createSandboxSession(user_id: string, template_id: string, language?: string, voice?: string, onTrace?: (trace:AgentTrace[]) => void): Promise<SandboxSession> {
+  const result = await client.post('/sandbox/tasks/start', { user_id, template_id, language: language || '', voice: voice || '' }) as any
+  return waitForTask<SandboxSession>(result.task_id, onTrace)
 }
 
 export interface SandboxVoiceMessageInput {
@@ -156,12 +159,14 @@ export function getSandboxSession(session_id: string): Promise<SandboxSession> {
   return client.get(`/sandbox/sessions/${session_id}`) as unknown as Promise<SandboxSession>
 }
 
-export function sendSandboxMessage(session_id: string, user_id: string, content: string): Promise<SandboxMessageResult> {
-  return client.post(`/sandbox/sessions/${session_id}/messages`, { user_id, content }) as unknown as Promise<SandboxMessageResult>
+export async function sendSandboxMessage(session_id: string, user_id: string, content: string, onTrace?: (trace:AgentTrace[]) => void): Promise<SandboxMessageResult> {
+  const result = await client.post(`/sandbox/sessions/${session_id}/messages/tasks`, { user_id, content }) as any
+  return waitForTask<SandboxMessageResult>(result.task_id, onTrace)
 }
 
-export function endSandboxSession(session_id: string, user_id: string): Promise<SandboxSession> {
-  return client.post(`/sandbox/sessions/${session_id}/end`, { user_id }) as unknown as Promise<SandboxSession>
+export async function endSandboxSession(session_id: string, user_id: string, onTrace?: (trace:AgentTrace[]) => void): Promise<SandboxSession> {
+  const result = await client.post(`/sandbox/sessions/${session_id}/end/tasks`, { user_id }) as any
+  return waitForTask<SandboxSession>(result.task_id, onTrace)
 }
 
 export function listSandboxRecords(user_id: string): Promise<{ records: SandboxRecord[] }> {

@@ -33,11 +33,19 @@ export interface TeachingSnapshot {
 /** 实时多 Agent 工作轨迹节点（GET /tasks/{id} 流式返回，基于真实执行） */
 export interface AgentTrace {
   agent: string       // 内部 agent 键（concierge/retrieval/draft/review/white_hat...）
-  name: string        // 中文显示名（如 旅鸢管家 / 白帽 · 事实）
+  name: string        // 中文显示名（如 旅鸢管家 / 白帽   事实）
   role: string        // 当前动作说明
   status: 'working' | 'done' | 'failed'
   detail?: string     // 附加结果简述
   ts?: number
+  seq?: number
+  step?: 'planning' | 'dispatch' | 'collaboration' | 'delivery'
+  event?: 'dispatch'
+  source?: 'policy'
+  agents?: string[]
+  tools?: string[]
+  round?: number
+  run_id?: string
 }
 
 export interface MessagePayload {
@@ -56,6 +64,7 @@ export interface MessageResult {
   assets: Array<{ asset_id: string; title: string; asset_type: string }>
   trace?: AgentTrace[]
   teaching?: TeachingSnapshot | null
+  payload?: Record<string, any> | null
 }
 
 export interface TaskStatus {
@@ -103,7 +112,7 @@ export async function sendMessageWithPhase(
     } catch (e: any) {
       // 任务不存在：多半是后端在任务执行期间热重载/重启，内存任务表被清空
       if (e?.response?.status === 404) {
-        const lost = new Error('任务不存在（后端可能在请求期间热重载/重启）') as any
+        const lost = new Error('任务不存在（后端可能在请求期间热重载、重启）') as any
         lost._apiError = {
           type: ApiErrorType.TASK_LOST,
           message: '后端在任务执行期间重启，任务已中断，请重新发送',

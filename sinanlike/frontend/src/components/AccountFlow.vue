@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="access-overlay" appear @after-enter="focusStep" @after-leave="restoreFocus">
       <div v-if="accounts.flowOpen" ref="overlay" class="access-overlay" :class="{ 'show-onboarding': accounts.flowStage === 'onboarding' }" @keydown="trapFocus">
-        <Transition name="access-step" mode="out-in" appear @after-enter="focusStep">
+        <Transition :css="false" mode="out-in" appear @enter="enterStep" @leave="leaveStep" @after-enter="focusStep">
           <section v-if="accounts.flowStage === 'access'" key="access" class="access-card" role="dialog" aria-modal="true" aria-labelledby="access-title" :aria-busy="busy">
             <aside class="access-intro">
               <div class="access-brand"><img :src="brandLogo" alt="旅鸢 logo" /><span>旅鸢</span></div>
@@ -65,6 +65,38 @@ const error = ref('')
 let previousFocus: HTMLElement | null = null
 let previousOverflow = ''
 let locked = false
+let launchBounds: DOMRect | null = null
+const animations = new Set<Animation>()
+
+watch(() => accounts.flowStage, (stage, previous) => {
+  if (stage === 'onboarding' && previous === 'access') launchBounds = overlay.value?.querySelector('.access-card')?.getBoundingClientRect() || null
+}, { flush: 'sync' })
+
+function animateStep(element: Element, frames: Keyframe[], duration: number, done: () => void) {
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reduced || !element.animate) { queueMicrotask(done); return }
+  let animation: Animation
+  try { animation = element.animate(frames, { duration, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }) }
+  catch { queueMicrotask(done); return }
+  animations.add(animation)
+  animation.finished.catch(() => {}).finally(() => { animations.delete(animation); animation.cancel(); done() })
+}
+function enterStep(element: Element, done: () => void) {
+  if (element.classList.contains('ow-screen') && launchBounds) {
+    const target = element.getBoundingClientRect(), origin = launchBounds
+    launchBounds = null
+    if (target.width <= 0 || target.height <= 0) { queueMicrotask(done); return }
+    animateStep(element, [
+      { transformOrigin: '0 0', transform: `translate(${origin.left - target.left}px, ${origin.top - target.top}px) scale(${origin.width / target.width}, ${origin.height / target.height})`, borderRadius: '24px', opacity: .75 },
+      { transformOrigin: '0 0', transform: 'translate(0, 0) scale(1, 1)', borderRadius: '0px', opacity: 1 },
+    ], 620, done)
+  } else animateStep(element, [{ opacity: 0, transform: 'translateY(14px) scale(.96)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], 380, done)
+}
+function leaveStep(element: Element, done: () => void) {
+  // Wait until Vue finishes the current patch before mounting the incoming screen.
+  if (accounts.flowStage === 'onboarding' && element.classList.contains('access-card')) { queueMicrotask(done); return }
+  animateStep(element, [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.98)' }], 180, done)
+}
 
 watch(() => accounts.flowOpen, (open) => {
   if (open) {
@@ -75,10 +107,10 @@ watch(() => accounts.flowOpen, (open) => {
 }, { flush: 'sync', immediate: true })
 function unlock() { if (locked) { document.body.style.overflow = previousOverflow; locked = false } }
 function restoreFocus() { unlock(); if (previousFocus?.isConnected) previousFocus.focus() }
-onBeforeUnmount(unlock)
+onBeforeUnmount(() => { unlock(); animations.forEach(animation => animation.cancel()); animations.clear() })
 async function focusStep() {
   await nextTick()
-  const target = accounts.flowStage === 'access' ? nameInput.value || overlay.value?.querySelector<HTMLElement>('.access-accounts button') : overlay.value?.querySelector<HTMLElement>('.ow-panel h2, .ow-return')
+  const target = accounts.flowStage === 'access' ? nameInput.value || overlay.value?.querySelector<HTMLElement>('.access-accounts button') : overlay.value?.querySelector<HTMLElement>('.ow-panel [tabindex="-1"], .ow-return')
   target?.focus({ preventScroll: true })
 }
 function trapFocus(event: KeyboardEvent) {
@@ -112,9 +144,10 @@ function finish() { accounts.closeFlow(); void router.push(accounts.returnTo) }
 
 <style lang="scss" scoped>
 @use '@/styles/tokens' as *;
-.access-overlay { position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; padding: 32px; overflow: hidden; background: rgba(27, 54, 79, .28); backdrop-filter: blur(7px); font-family: $font-sans; color: $color-text; transition: background .5s ease, backdrop-filter .5s ease; &.show-onboarding { padding: 0; background: $color-bg; backdrop-filter: blur(0); } }
+.access-overlay { position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; padding: 32px; overflow: hidden; background: rgba(27, 54, 79, .28); backdrop-filter: blur(7px); font-family: $font-sans; color: $color-text; transition: background .62s ease, backdrop-filter .62s ease; &.show-onboarding { padding: 0; background: $color-bg; backdrop-filter: blur(0); } }
+.access-overlay :deep(.ow-screen) { overflow: hidden; }
 .access-card { position: relative; width: min(880px, 100%); max-height: calc(100dvh - 64px); display: grid; grid-template-columns: .9fr 1.1fr; background: $color-surface; border: 1px solid $color-border; border-radius: 24px 8px 24px 8px; box-shadow: 0 24px 90px rgba(28, 66, 110, .16); overflow: auto; }
-.access-intro { position: relative; padding: 38px 32px 160px; overflow: hidden; background: linear-gradient(150deg, #eef6fe, #f7fbff); border-right: 1px solid $color-border; h2 { font-family: $font-serif; font-size: 29px; line-height: 1.6; font-weight: 600; margin: 14px 0; } p { font-size: 14px; color: $color-text-secondary; line-height: 1.9; } ol { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 15px; font-size: 14px; } li { display: flex; align-items: center; gap: 12px; span { color: $color-primary; font-size: 12px; } } }
+.access-intro { position: relative; padding: 38px 32px 160px; overflow: hidden; background: linear-gradient(150deg, #eef6fe, #f7fbff); border-right: 1px solid $color-border; h2 { font-family: $font-serif; font-size: 29px; line-height: 1.6; font-weight: 600; margin: 14px 0; } p { font-size: 14px; color: $color-text-secondary; line-height: 1.9; } ol { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 15px; font-size: 14px; } li { display: flex; align-items: center; gap: 12px; span { color: $color-text-link; font-size: 12px; } } }
 .access-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 38px; img { width: 38px; height: 38px; object-fit: contain; } span { font: 600 25px/1.3 $font-serif; letter-spacing: 3px; } }
 .access-eyebrow { display: block; font-size: 12px; color: $color-primary-dark; letter-spacing: 1.2px; }
 .access-landscape { position: absolute; left: 0; bottom: 0; width: 100%; height: 160px; opacity: .8; pointer-events: none; }
@@ -133,12 +166,8 @@ button:focus-visible { outline: 2px solid $color-primary; outline-offset: 3px; }
 .access-spinner { width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.45); border-top-color: #fff; border-radius: 50%; animation: access-spin .8s linear infinite; }
 .access-overlay-enter-active, .access-overlay-leave-active { transition: opacity .32s ease, backdrop-filter .32s ease; }
 .access-overlay-enter-from, .access-overlay-leave-to { opacity: 0; backdrop-filter: blur(0); }
-.access-step-enter-active { transition: opacity .42s ease, transform .5s cubic-bezier(.2,.7,.2,1); }
-.access-step-leave-active { transition: opacity .2s ease, transform .24s ease; }
-.access-step-enter-from { opacity: 0; transform: translateY(20px) scale(.985); }
-.access-step-leave-to { opacity: 0; transform: translateY(-12px) scale(.985); }
 @keyframes access-spin { to { transform: rotate(360deg); } }
 @media (max-width: 760px) { .access-overlay { padding: 20px; } .access-card { grid-template-columns: 1fr; max-height: calc(100dvh - 40px); } .access-intro { display: none; } .access-form { padding: 62px 28px 28px; } }
 @media (max-width: 430px) { .access-overlay { padding: 14px; } .access-card { max-height: calc(100dvh - 28px); } .access-form { padding: 56px 22px 24px; h1 { font-size: 22px; } } }
-@media (prefers-reduced-motion: reduce) { .access-overlay, .access-overlay-enter-active, .access-overlay-leave-active, .access-step-enter-active, .access-step-leave-active { transition: none; } .access-step-enter-from, .access-step-leave-to { transform: none; } .access-primary:hover { transform: none; } .access-spinner { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .access-overlay, .access-overlay-enter-active, .access-overlay-leave-active { transition: none; } .access-primary:hover { transform: none; } .access-spinner { animation: none; } }
 </style>

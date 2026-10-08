@@ -44,7 +44,7 @@ export const ASSET_TYPE_META: Record<string, { label: string; color: string; emo
   text: { label: '文档', color: '#2d8a2d', emoji: '📄' },
   plan: { label: '学习计划', color: '#7c3aed', emoji: '🗺️' },
   report: { label: '学习报告', color: '#e8875b', emoji: '📊' },
-  wrong_book: { label: '易错题·降维解释', color: '#C0504D', emoji: '💡' },
+  wrong_book: { label: '易错题 降维解释', color: '#C0504D', emoji: '💡' },
 }
 
 export function assetTypeLabel(t: string): string {

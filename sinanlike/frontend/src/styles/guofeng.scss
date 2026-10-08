@@ -11,22 +11,22 @@
     background-image: none;
   }
   .lvyuan-page-intro {
-    position: relative; padding: 0 0 18px; gap: 20px;
+    position: relative; padding:0 0 17px; gap:20px;
     border-bottom: 1px solid #d9e9f6;
     .intro-copy { flex: 1; min-width: 0; position: relative; z-index: 1; }
     .intro-eyebrow { display: flex; align-items: center; gap: 10px; letter-spacing: 3px; }
-    h1 { font-size: clamp(21px,1.85vw,26px); letter-spacing: .6px; margin-top: 13px; }
-    p { color: #7890a5; }
+    h1 { font-size:23px; letter-spacing:.5px; margin:0; }
+    p { color: $color-text-secondary; }
     .intro-status { position: static; font-size: 10px; }
   }
   .ai-card { position: relative; border: 1px solid #c3dff3; border-radius: 24px 6px 24px 6px; }
   .ai-card-header {
-    position: relative; isolation: isolate; padding: 26px 28px 26px;
+    position:relative; isolation:isolate; padding:21px 25px 22px;
     background: linear-gradient(105deg,#338ff2,#56a4ee);
     .header-top, .header-sub { position: relative; z-index: 2; }
-    .header-landscape { position: absolute; z-index: -1; right: -16px; bottom: -8px; width: 450px; opacity: .32; filter: brightness(0) invert(1); }
-    &::after { content: ''; position: absolute; left: 28px; right: 28px; bottom: 4px; height: 12px; background: url('../assets/huiwen-border.svg') left center/64px 12px repeat-x; filter: brightness(0) invert(1); opacity: .27; pointer-events: none; }
-    .header-title { letter-spacing: 2px; }
+    .header-landscape { position:absolute; z-index:-1; right:-10px; bottom:-12px; width:290px; opacity:.16; filter:brightness(0) invert(1); pointer-events:none; }
+    &::after { content:''; position:absolute; right:25px; bottom:5px; width:150px; height:9px; background:url('../assets/huiwen-border.svg') right center/52px 9px repeat-x; filter:brightness(0) invert(1); opacity:.19; pointer-events:none; }
+    .header-title { letter-spacing:.6px; }
   }
   .section-title, .sec-title, .ph-title {
     display: inline-flex; align-items: center; gap: 10px; letter-spacing: 1.5px;
@@ -56,7 +56,7 @@
   .welcome-content { position: relative; z-index: 1; }
   .hero-slogan { font-family: $font-serif; letter-spacing: 4px; }
   .hero-title { position: relative; }
-  .hero-title::after { content: '游学'; position: absolute; left: calc(100% + 14px); top: 8px; width: 20px; padding: 4px 2px; font-size: 12px; line-height: 1.3; letter-spacing: 2px; color: #6195bd; border: 1px solid #8bb5d4; outline: 1px solid #d0e4f3; outline-offset: 2px; border-radius: 2px; }
+  .hero-title::after { content: '游学'; position: absolute; left: calc(100% + 14px); top: 8px; width: 20px; padding: 4px 2px; font-size: 12px; line-height: 1.3; letter-spacing: 2px; color: $color-text-link; border: 1px solid #8bb5d4; outline: 1px solid #d0e4f3; outline-offset: 2px; border-radius: 2px; }
   .onboard-guide { border-color: #c5deef; background: rgba(255,255,255,.94); }
   .stats-inner { background: rgba(255,255,255,.92); }
   .og-step { font-family: $font-serif; border-radius: 6px 2px 6px 2px; }
@@ -68,5 +68,12 @@
   }
 }
 @media (max-width: 820px) {
-  .main-layout:not(.route-preserved) .ai-card-header .header-landscape { width: 300px; opacity: .2; }
+  .main-layout:not(.route-preserved) .ai-card-header .header-landscape { width:220px; opacity:.12; }
 }
+
+// 页面切换保留组件实例，透明度与小幅位移避免硬切。
+.page-switch-enter-active, .content-switch-enter-active { transition:opacity .24s ease,transform .28s cubic-bezier(.2,.7,.2,1); }
+.page-switch-leave-active, .content-switch-leave-active { transition:opacity .12s ease,transform .15s ease; }
+.page-switch-enter-from, .content-switch-enter-from { opacity:0; transform:translateY(7px); }
+.page-switch-leave-to, .content-switch-leave-to { opacity:0; transform:translateY(-3px); }
+@media(prefers-reduced-motion:reduce) { .page-switch-enter-active,.page-switch-leave-active,.content-switch-enter-active,.content-switch-leave-active { transition:none; } .page-switch-enter-from,.page-switch-leave-to,.content-switch-enter-from,.content-switch-leave-to { transform:none; } }

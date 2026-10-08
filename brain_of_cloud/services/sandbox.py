@@ -6,10 +6,11 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from brain_of_cloud.llm.client import LLMClient
 from brain_of_cloud.storage.sqlite import SQLiteStore
+from brain_of_cloud.services.agent_catalog import trace_event
 
 # 五维评估（与前端既有结算维度保持一致）
 FIVE_DIMS = ["表达能力", "控场能力", "文化知识", "服务意识", "互动引导"]
@@ -151,8 +152,9 @@ def _load_templates() -> list[SandboxTemplate]:
     global _TEMPLATES_CACHE
     if _TEMPLATES_CACHE is None:
         from brain_of_cloud.services.sandbox_templates import TEMPLATES
+        from brain_of_cloud.services.communication_templates import TEMPLATES as COMMUNICATION
 
-        _TEMPLATES_CACHE = TEMPLATES
+        _TEMPLATES_CACHE = [*TEMPLATES, *COMMUNICATION]
     return _TEMPLATES_CACHE
 
 
@@ -217,7 +219,7 @@ class SandboxService:
 
     # ── 会话 ──
 
-    def _generate_customer(self, template: SandboxTemplate, lang: str | None = None) -> CustomerProfile:
+    def _generate_customer(self, template: SandboxTemplate, lang: str | None = None, trace_cb=None) -> CustomerProfile:
         """v3 游客动态生成：LLM 按模板+均匀随机年龄段生成多维人设。
 
         lang 非空时（语音/外语训练），国籍锁定为该语言母语国家（见 customer_generator）。
@@ -226,9 +228,11 @@ class SandboxService:
         try:
             data = self._customer_gen.generate(template, self._rng, lang=lang)
             if data and data.get("name"):
+                trace_event(trace_cb, "customer_generator", "生成游客背景", "done", "游客背景与隐藏诉求已就绪", step="collaboration")
                 return _customer_from_dict(data)
         except Exception:
             pass
+        trace_event(trace_cb, "customer_generator", "生成游客背景", "failed", "生成暂不可用，已采用场景内置游客", step="collaboration")
         pool = template.customer_pool
         if lang:
             from dataclasses import replace
@@ -253,11 +257,16 @@ class SandboxService:
         mode: str | None = None,
         language: str | None = None,
         voice: str | None = None,
+        trace_cb: Callable[[dict], None] | None = None,
     ) -> dict[str, Any]:
         template = self.get_template(template_id)
+        trace_event(trace_cb, "system", "准备实战场景", "done", step="planning")
+        trace_event(trace_cb, "system", "确定实战分工", "done", step="dispatch", event="dispatch", round=1,
+                    agents=["customer_generator", "customer_simulator"], tools=["start_session"])
+        trace_event(trace_cb, "customer_generator", "生成游客背景", step="collaboration")
         # v3：游客动态生成（多维人设，年龄均匀分布）；LLM 失败时兜底模板游客池
         # 语音/外语训练：language 决定游客国籍（customer_generator 约束），voice 由语言+人设性别决定
-        customer = self._generate_customer(template, lang=language)
+        customer = self._generate_customer(template, lang=language, trace_cb=trace_cb)
         if language and not voice:
             from brain_of_cloud.services.language_profiles import pick_voice
 
@@ -299,15 +308,17 @@ class SandboxService:
         self._store.save_sandbox_session(session)
 
         # 游客开场白：一次 LLM 调用；失败则用模板开场兜底
-        opening_reply = self._customer_opening(template, customer)
+        trace_event(trace_cb, "customer_simulator", "游客准备开场", step="collaboration")
+        opening_reply = self._customer_opening(template, customer, trace_cb=trace_cb)
         session["state"]["messages"].append(
             {"role": "customer", "content": opening_reply}
         )
         session["state"]["stage_turns"] = 0
         self._store.save_sandbox_session(session)
+        trace_event(trace_cb, "system", "场景已准备好", "done", step="delivery")
         return self.get_session(session_id)
 
-    def _customer_opening(self, template: SandboxTemplate, customer: CustomerProfile) -> str:
+    def _customer_opening(self, template: SandboxTemplate, customer: CustomerProfile, trace_cb=None) -> str:
         fallback = f"{template.opening}（{customer.name}看着你，等你开口。）"
         try:
             initial_state = {"trust": self._rng.randint(50, 70), "mood": "一般",
@@ -325,14 +336,20 @@ class SandboxService:
             )
             parsed = _parse_json(resp.content)
             reply = parsed.get("reply") or parsed.get("content")
+            trace_event(trace_cb, "customer_simulator", "游客准备开场", "done", step="collaboration")
             return reply if reply else fallback
         except Exception:
+            trace_event(trace_cb, "customer_simulator", "游客准备开场", "failed", "已采用场景开场白", step="collaboration")
             return fallback
 
     # ── 对话 ──
 
-    def send_message(self, session_id: str, user_text: str) -> dict[str, Any]:
+    def send_message(self, session_id: str, user_text: str, trace_cb: Callable[[dict], None] | None = None) -> dict[str, Any]:
         session = self._require_active(session_id)
+        trace_event(trace_cb, "system", "读取当前场景与对话", "done", step="planning")
+        trace_event(trace_cb, "system", "确定本轮互动分工", "done", step="dispatch", event="dispatch", round=1,
+                    agents=["customer_simulator", "scene_director"], tools=["send_message"])
+        trace_event(trace_cb, "customer_simulator", "回应学员，更新游客情绪", step="collaboration")
         template = self.get_template(session["template_id"])
         customer = _customer_from_dict(session["customer"])
         state = session["state"]
@@ -368,7 +385,9 @@ class SandboxService:
             trust_delta = _to_int(parsed.get("trust_delta"), 0, -30, 30)
             reaction = str(parsed.get("reaction") or "").strip()
             hidden_revealed = bool(parsed.get("hidden_revealed"))
+            trace_event(trace_cb, "customer_simulator", "游客已回应", "done", step="collaboration")
         except Exception:
+            trace_event(trace_cb, "customer_simulator", "游客回应暂不可用", "failed", "保持当前场景，稍后可继续互动", step="collaboration")
             reply, mood, advanced = "(游客沉默片刻)", "一般", False
             trust_delta, reaction, hidden_revealed = 0, "", False
 
@@ -402,6 +421,7 @@ class SandboxService:
         scene_fail_reason = None
         director_action = None
         director_reason = ""
+        trace_event(trace_cb, "scene_director", "判断目标与阶段推进", step="collaboration")
         try:
             d = self._director.decide(
                 template, stage_idx, customer, cs,
@@ -409,7 +429,9 @@ class SandboxService:
             )
             director_action = d.action
             director_reason = d.reason or ""
+            trace_event(trace_cb, "scene_director", "判断目标与阶段推进", "done", director_reason, step="collaboration")
         except Exception:
+            trace_event(trace_cb, "scene_director", "判断目标与阶段推进", "failed", "采用场景规则判断", step="collaboration")
             director_action = None
 
         if director_action == "fail":
@@ -533,6 +555,7 @@ class SandboxService:
 
         self._store.save_sandbox_session(session)
 
+        trace_event(trace_cb, "system", "游客回应与场景状态已更新", "done", step="delivery")
         return {
             "reply": reply,
             "mood": mood,
@@ -551,7 +574,7 @@ class SandboxService:
 
     # ── 评估 ──
 
-    def end_session(self, session_id: str, user_id: str | None = None) -> dict[str, Any]:
+    def end_session(self, session_id: str, user_id: str | None = None, trace_cb: Callable[[dict], None] | None = None) -> dict[str, Any]:
         session = self._store.get_sandbox_session(session_id)
         if session is None:
             raise SandboxError(f"未知沙盒会话: {session_id}")
@@ -561,6 +584,10 @@ class SandboxService:
         template = self.get_template(session["template_id"])
         customer = _customer_from_dict(session["customer"])
         transcript = _transcript(session["state"]["messages"])
+        trace_event(trace_cb, "system", "整理本场实战记录", "done", step="planning")
+        trace_event(trace_cb, "system", "确定复盘分工", "done", step="dispatch", event="dispatch", round=1,
+                    agents=["sandbox_evaluator"], tools=["end_session"])
+        trace_event(trace_cb, "sandbox_evaluator", "五维评分与复盘", step="collaboration")
         if not transcript:
             raise SandboxError("对话为空，无法评估")
 
@@ -608,7 +635,9 @@ class SandboxService:
                 response_format={"type": "json_object"},
             )
             evaluation = _parse_json(resp.content)
+            trace_event(trace_cb, "sandbox_evaluator", "五维评分与复盘", "done", step="collaboration")
         except Exception:
+            trace_event(trace_cb, "sandbox_evaluator", "五维评分与复盘", "failed", "评估生成暂不可用，本次报告包含重试提示", step="collaboration")
             evaluation = {
                 "total": 60,
                 "dims": {d: 3 for d in FIVE_DIMS},
@@ -643,6 +672,7 @@ class SandboxService:
 
         # 落为学习中心报告资产
         self._create_report_asset(session, template, evaluation, recommended_skills)
+        trace_event(trace_cb, "system", "评分与报告已保存", "done", step="delivery")
 
         return self.get_session(session_id)
 

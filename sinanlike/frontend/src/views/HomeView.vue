@@ -1,5 +1,6 @@
 <template>
   <div class="home-page">
+    <FullscreenQuiz v-model="quizFullscreen" :quiz="activeQuiz" :pending="sending" :feedback="lastFeedback" @answer="submitFullQuiz" />
     <!-- 历史对话面板（仪表盘与对话页共用，fixed 定位） -->
     <div v-if="historyOpen" class="history-mask" @click="historyOpen = false"></div>
     <div v-if="historyOpen" class="history-panel" @click.stop>
@@ -13,18 +14,20 @@
           class="hist-item" :class="{ active: s.session_id === store.sessionId }"
           @click="switchSession(s)">
           <span class="hist-t">{{ s.title }}</span>
-          <span class="hist-meta">{{ s.message_count }} 条 · {{ formatSessionTime(s.updated_at) }}</span>
+          <span class="hist-meta">{{ s.message_count }} 条   {{ formatSessionTime(s.updated_at) }}</span>
         </button>
       </div>
       <div class="hist-foot">
         <button class="hist-new" @click="handleNewSession"><SIcon name="plus" :size="11" /> 新建对话</button>
       </div>
     </div>
+    <Transition name="content-switch" mode="out-in" @after-enter="scrollToBottom">
+    <HomeLearningEntrances v-if="assessmentSection" :key="assessmentSection" :section="assessmentSection" @diagnostic="startDiagnostic" />
     <!-- ══════════════ 仪表盘（无消息） ══════════════ -->
-    <div v-if="!inChat" class="dash-scroll">
+    <div v-else-if="!inChat" key="dashboard" class="dash-scroll">
       <div class="home-content">
         <div class="lvyuan-page-intro">
-          <div class="intro-copy"><span class="intro-eyebrow">旅鸢 · 智能实训</span><h1>从了解中国，到定制一次好旅行</h1><p>在知识学习与真实场景之间，找到你的下一步。</p></div>
+          <div class="intro-copy"><h1>做题练习</h1><p>选一种练习方式，围绕你的知识起点逐步巩固。</p></div>
           <span class="intro-status"><i :class="{ online: store.backendOnline }"></i>{{ store.backendOnline ? '实训服务已连接' : '等待服务连接' }}</span>
         </div>
         <!-- 后端状态提示 -->
@@ -34,12 +37,15 @@
           <el-button size="small" text @click="store.checkHealth()">重试</el-button>
         </div>
 
+        <div class="practice-shortcuts" aria-label="练习方式">
+          <button v-for="(item, index) in practiceShortcuts" :key="item.label" :class="{ featured: index === 0 }" :disabled="sending || co.running" @click="practiceShortcut(item)"><span class="practice-shortcut-icon"><SIcon :name="item.icon" :size="21" /></span><span class="practice-shortcut-copy"><b>{{ item.label }}</b><small>{{ item.description }}</small></span><SIcon name="right" :size="13" /></button>
+        </div>
         <!-- AI 对话卡 -->
         <div class="ai-card">
           <div class="ai-card-header">
             <GuofengLandscape class="header-landscape" />
             <div class="header-top">
-              <p class="header-title">与旅鸢开启一段新学习</p>
+              <p class="header-title">让旅鸢为你安排练习</p>
               <div class="header-actions">
                 <!-- 起始界面历史对话入口 -->
                 <div class="history-wrap dash">
@@ -53,24 +59,20 @@
                 </el-button>
               </div>
             </div>
-            <p class="header-sub">输入问题，AI 结合你的画像与学习进度定制内容</p>
+            <p class="header-sub">说出想练的知识点，或描述需要巩固的内容</p>
           </div>
           <div class="ai-card-body">
             <textarea
               v-model="inputText"
               ref="dashTaRef"
-              placeholder="例如：为首次来华的法国游客设计三天上海行程；讲解中国古典园林；练习跨文化客诉处理。"
+              placeholder="例如：我想练习入境游客接待，帮我出几道题"
               rows="3"
               class="ai-input"
               :disabled="sending"
               @keydown.enter.exact="handleSend"
             />
             <div class="ai-toolbar">
-              <div class="toolbar-left">
-                <button class="tool-btn" disabled><el-icon><Microphone /></el-icon><span>语音</span></button>
-                <button class="tool-btn" disabled><el-icon><Link /></el-icon><span>附件</span></button>
-                <button class="tool-btn" disabled><el-icon><Picture /></el-icon><span>图片</span></button>
-              </div>
+              <span class="practice-input-note"><SIcon name="sparkle" :size="13" />根据学习表现调整练习</span>
               <button class="send-btn" :class="{ active: inputText && !sending }" :disabled="sending || !inputText.trim()" @click="handleSend">
                 <el-icon v-if="sending"><Loading /></el-icon>
                 <el-icon v-else><Promotion /></el-icon>
@@ -81,18 +83,6 @@
         </div>
 
         <div class="home-dashboard-sections">
-        <!-- 快捷问题 -->
-        <section class="section">
-          <div class="section-header">
-            <h2 class="section-title">快捷提问</h2>
-          </div>
-          <div class="quick-chips">
-            <button v-for="q in quickQuestions" :key="q" class="chip" @click="sendQuick(q)">
-              <span class="chip-dot" />
-              {{ q }}
-            </button>
-          </div>
-        </section>
 
         <!-- 统计卡片 -->
         <div v-if="accounts.isSignedIn" class="stats-row">
@@ -100,7 +90,7 @@
             <el-icon class="stat-card-icon flame"><Collection /></el-icon>
             <div class="stat-card-value">{{ userStats.attempted_skills }}</div>
             <div class="stat-card-label">已练技能点</div>
-            <div class="stat-card-unit">/ {{ userStats.total_skills }} 个</div>
+            <div class="stat-card-unit">、{{ userStats.total_skills }} 个</div>
           </div>
           <div class="stat-card light">
             <el-icon class="stat-card-icon"><CircleCheckFilled /></el-icon>
@@ -125,7 +115,7 @@
         <section v-if="accounts.isSignedIn" class="section">
           <div class="section-header">
             <h2 class="section-title">学习进度</h2>
-            <button class="section-more" @click="$router.push('/app/training')">去训练场 <el-icon><ArrowRight /></el-icon></button>
+            <button class="section-more" @click="$router.push('/app/training?focus=integrated')">去训练场 <el-icon><ArrowRight /></el-icon></button>
           </div>
           <div v-if="masteryEntries.length" class="task-list">
             <div v-for="item in masteryEntries" :key="item.id" class="task-item" @click="goKnowledge">
@@ -164,13 +154,11 @@
 
         <!-- 推荐条 -->
         <div class="recommend-bar">
-          <InkMountain class="rec-ink" />
           <div class="rec-info">
-            <span class="rec-tag">{{ accounts.isSignedIn ? '下一步建议' : '从你的起点出发' }}</span>
-            <span class="rec-title">{{ accounts.isSignedIn ? recommendText : '先逛逛，准备好后开启专属学习' }}</span>
-            <span class="rec-desc">{{ accounts.isSignedIn ? '基于你的学习画像与掌握度自动生成' : '注册后，旅鸢会结合你的经验与目标安排学习路线' }}</span>
+            <span class="rec-title">{{ accounts.isSignedIn ? recommendText : '开启专属学习' }}</span>
+            <span class="rec-desc">{{ accounts.isSignedIn ? '根据画像与掌握度推荐' : '建立画像，保存学习进度' }}</span>
           </div>
-          <button class="rec-btn" @click="accounts.isSignedIn ? goRecommend() : accounts.openAccess()">{{ accounts.isSignedIn ? recommendAction : '登录 / 注册' }} <el-icon><ArrowRight /></el-icon></button>
+          <button class="rec-btn" @click="accounts.isSignedIn ? goRecommend() : accounts.openAccess()">{{ accounts.isSignedIn ? recommendAction : '登录、注册' }} <el-icon><ArrowRight /></el-icon></button>
         </div>
         </div>
 
@@ -178,11 +166,11 @@
     </div>
 
     <!-- ══════════════ 纯对话页（有消息） ══════════════ -->
-    <div v-else class="hp-page">
+    <div v-else key="chat" class="hp-page">
       <!-- 页头 -->
       <header class="ph">
         <div class="ph-left">
-          <h2 class="ph-title">首页</h2>
+          <h2 class="ph-title">{{ route.query.activity === 'quiz' ? '做题练习' : '学习对话' }}</h2>
           <!-- 历史对话入口（面板在根级共用） -->
           <div class="history-wrap">
             <button class="ph-history" :class="{ open: historyOpen }" @click="toggleHistory">
@@ -197,7 +185,7 @@
           </button>
           <span class="pill" :class="{ offline: !store.backendOnline }">
             <span class="conn-dot" :class="{ on: store.backendOnline }"></span>
-            {{ store.backendOnline ? 'AI 服务在线' : '离线 · 演示模式' }}
+            {{ store.backendOnline ? 'AI 服务在线' : '离线   演示模式' }}
           </span>
         </div>
       </header>
@@ -238,68 +226,11 @@
                 <!-- 教学反馈徽标（答错 → 纠错讲解中） -->
                 <div v-if="msg.role === 'assistant' && msg.teaching?.stage === 'feedback'" class="chat-msg-teach-badge" :class="{ reteach: (msg.teaching.consecutive_incorrect || 0) > 0 }">
                   <SIcon :name="(msg.teaching.consecutive_incorrect || 0) > 0 ? 'shield' : 'check'" :size="11" />
-                  <span>{{ (msg.teaching.consecutive_incorrect || 0) > 0 ? '纠错讲解中 · 老师正在给你重讲' : '学习反馈' }}</span>
+                  <span>{{ (msg.teaching.consecutive_incorrect || 0) > 0 ? '纠错讲解中   老师正在给你重讲' : '学习反馈' }}</span>
                 </div>
-                <!-- 做题卡片（练习阶段 → 选择题窗口 / 简答题窗口，参考 DSH「让用户选择的窗口」） -->
-                <div v-if="msg.role === 'assistant' && msg.teaching?.stage === 'practicing' && msg.teaching?.last_quiz" class="quiz-card">
-                  <div class="quiz-card-head">
-                    <span class="quiz-type-badge" :class="isEssayQuiz(msg.teaching.last_quiz) ? 'essay' : 'choice'">
-                      {{ isEssayQuiz(msg.teaching.last_quiz) ? '进阶 · 简答题' : '基础 · 选择题' }}
-                    </span>
-                    <span v-if="msg.teaching.last_quiz.difficulty_level" class="quiz-diff" :title="'难度 ' + msg.teaching.last_quiz.difficulty_level + '/5'">
-                      <i v-for="n in 5" :key="n" class="qstar" :class="{ on: n <= msg.teaching.last_quiz.difficulty_level }">★</i>
-                    </span>
-                    <span class="quiz-kp-title">{{ msg.teaching.last_quiz.knowledge_point_title }}</span>
-                    <span v-if="msg.teaching.last_quiz.progress && !msg.teaching.last_quiz.progress.exhausted" class="quiz-progress-badge">
-                      已做 {{ msg.teaching.last_quiz.progress.done }}/{{ msg.teaching.last_quiz.progress.total }}
-                    </span>
-                    <span v-else-if="msg.teaching.last_quiz.progress?.exhausted" class="quiz-progress-badge done">
-                      本主题选择题已完成 ✅
-                    </span>
-                  </div>
-                  <!-- 选择题窗口：选项按钮卡片，点击即答 -->
-                  <div v-if="!isEssayQuiz(msg.teaching.last_quiz) && msg.teaching.last_quiz.options?.length" class="quiz-choice-body">
-                    <p class="quiz-prompt">{{ msg.teaching.last_quiz.prompt }}</p>
-                    <div class="quiz-options">
-                      <button
-                        v-for="(opt, oi) in (msg.teaching.last_quiz.options || [])"
-                        :key="opt"
-                        class="quiz-opt"
-                        :class="{ selected: selectedChoice === letterOf(opt, oi) }"
-                        :disabled="quizPending || sending"
-                        @click="sendAnswer(opt, oi)"
-                      >
-                        <span class="opt-letter">{{ letterOf(opt, oi) }}</span>
-                        <span class="opt-text">{{ stripOptionPrefix(opt) }}</span>
-                      </button>
-                    </div>
-                  </div>
-                  <!-- 简答题窗口：题目 + 输入框 + 提交 -->
-                  <div v-else class="quiz-essay-body">
-                    <p class="quiz-prompt essay">{{ msg.teaching.last_quiz.prompt }}</p>
-                    <template v-if="msg.teaching.last_quiz.rubric">
-                      <button class="quiz-rubric-toggle" @click="rubricOpen = !rubricOpen">
-                        答题后可与参考答案要点对照
-                      </button>
-                      <p v-if="rubricOpen" class="quiz-rubric">{{ msg.teaching.last_quiz.rubric }}</p>
-                    </template>
-                    <div class="quiz-essay-input-row">
-                      <textarea
-                        v-model="essayAnswer"
-                        class="quiz-essay-input"
-                        rows="2"
-                        placeholder="用一两句话写下你的回答"
-                        :disabled="quizPending || sending"
-                      ></textarea>
-                      <button
-                        class="quiz-essay-submit"
-                        :disabled="quizPending || sending || !essayAnswer.trim()"
-                        @click="submitEssayAnswer"
-                      >
-                        {{ quizPending ? '判分中…' : '提交回答' }}
-                      </button>
-                    </div>
-                  </div>
+                <div v-if="msg.role === 'assistant' && msg.teaching?.last_quiz" class="quiz-card quiz-summary">
+                  <div><span class="quiz-type-badge">{{ msg.teaching.last_quiz.type === 'essay' ? '简答题' : '选择题' }}</span><p>{{ msg.teaching.last_quiz.prompt }}</p></div>
+                  <button :disabled="sending || activeQuiz?.question_id !== msg.teaching.last_quiz.question_id" @click="quizFullscreen = true">{{ activeQuiz?.question_id === msg.teaching.last_quiz.question_id ? '进入全屏作答' : '已作答、历史题目' }}<SIcon name="right" :size="13" /></button>
                 </div>
                 <!-- 多智能体协同时间轴 -->
                 <div v-if="msg.role === 'assistant' && chainOf(msg.tool_calls).length" class="chat-msg-chain">
@@ -332,81 +263,18 @@
                 </div>
                 <!-- 资产卡片 -->
                 <div v-if="msg.assets?.length" class="chat-msg-assets">
-                  <span class="ca-text">📁 已生成 {{ msg.assets.length }} 份文件资产，已保存到学习中心</span>
-                  <el-button size="small" type="primary" round @click="$router.push('/app/knowledge-tree')">前往查看</el-button>
+                  <span class="ca-text">📁 已生成 {{ msg.assets.length }} 份文件资产，已保存到定制学习资源</span>
+                  <el-button size="small" type="primary" round @click="$router.push('/app/knowledge')">前往查看</el-button>
                 </div>
               </div>
             </div>
-            <!-- 多智能体协同实时直播：每个 Agent 一行，点开看分工，再看思考 -->
             <div class="chat-row assistant" v-if="sending">
-              <div class="chat-av">
-                <img :src="logoMark" alt="旅鸢" />
-              </div>
-              <div class="chat-main" :class="{ 'ma-wide': liveTrace.length > 0 }">
-                <div v-if="liveTrace.length === 0" class="chat-bubble thinking">
-                  <span class="think-spin"></span>
-                  <span class="t-text">{{ thinkingText }}</span>
-                </div>
-                <div v-else class="ma-panel">
-                  <div class="ma-head">
-                    <span class="ma-title"><i class="ma-live-dot"></i>多智能体协同</span>
-                    <span class="ma-badge live">实时</span>
-                    <span class="ma-count"><b>{{ liveDone }}</b>/{{ liveTrace.length }}</span>
-                    <button class="ma-fold" @click="toggleAllAgents">
-                      <SIcon :name="allAgentsOpen ? 'up' : 'right'" :size="11" />{{ allAgentsOpen ? '全部收起' : '全部展开' }}
-                    </button>
-                  </div>
-                  <div class="ma-topo" v-if="liveStages.length">
-                    <template v-for="(a, ai) in liveStages" :key="a.agent">
-                      <div class="ma-actor" :class="a.status">
-                        <span class="ma-actor-ico"><SIcon :name="a.icon" :size="13" /></span>
-                        <span class="ma-actor-name">{{ a.short }}</span>
-                        <i v-if="a.status === 'busy'" class="ma-actor-spin"><span></span></i>
-                        <i v-else-if="a.status === 'done'" class="ma-actor-ok"><SIcon name="check" :size="8" /></i>
-                      </div>
-                      <span v-if="ai < liveStages.length - 1" class="ma-topo-arrow"><SIcon name="right" :size="10" /></span>
-                    </template>
-                  </div>
-                  <div class="ma-stream" ref="maStreamRef">
-                    <div v-for="ag in liveAgents" :key="ag.agent" class="ma-agent" :class="[ag.status, ag.agent]">
-                      <button class="ma-agent-row" @click="toggleAgent(ag.agent)">
-                        <SIcon class="ma-agent-chev" :name="isAgentOpen(ag.agent) ? 'up' : 'right'" :size="12" />
-                        <span class="ma-agent-ico"><SIcon :name="ag.icon" :size="17" /></span>
-                        <span class="ma-agent-txt">
-                          <span class="ma-agent-name">{{ ag.name }}</span>
-                          <span class="ma-agent-role">{{ ag.lastRole }}<i v-if="ag.count > 1"> · {{ ag.count }} 次</i></span>
-                        </span>
-                        <span class="ma-agent-st">
-                          <span v-if="ag.status === 'busy'" class="ma-spin"></span>
-                          <span v-else-if="ag.status === 'done'" class="ma-ok"><SIcon name="check" :size="13" /></span>
-                          <span v-else-if="ag.status === 'fail'" class="ma-ng"><SIcon name="warn" :size="13" /></span>
-                        </span>
-                      </button>
-                      <div v-if="isAgentOpen(ag.agent)" class="ma-agent-body">
-                        <div v-for="(ev, ei) in ag.events" :key="ei" class="ma-ev" :class="ev.status">
-                          <div class="ma-ev-bar">
-                            <span class="ma-ev-idx">{{ ei + 1 }}</span>
-                            <span class="ma-ev-role">{{ ev.role }}</span>
-                            <span class="ma-ev-st">
-                              <span v-if="ev.status === 'working'" class="ma-spin sm"></span>
-                              <SIcon v-else-if="ev.status === 'done'" name="check" :size="12" />
-                              <SIcon v-else-if="ev.status === 'failed'" name="warn" :size="12" />
-                            </span>
-                          </div>
-                          <button v-if="ev.detail" class="ma-think" @click.stop="toggleNote(ag.agent, ei)">
-                            <SIcon :name="noteOpen(ag.agent, ei) ? 'up' : 'eye'" :size="11" />
-                            {{ noteOpen(ag.agent, ei) ? '收起思考' : '查看思考' }}
-                          </button>
-                          <div v-if="noteOpen(ag.agent, ei)" class="ma-note">{{ ev.detail }}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <div class="chat-av"><img :src="logoMark" alt="旅鸢" /></div>
+              <div class="chat-main"><div class="chat-bubble thinking"><span class="think-spin"></span><span class="t-text">{{ co.currentStep }}</span><button class="chat-workflow-btn" @click="co.visible = true; co.collapsed = false">查看协作过程</button></div></div>
             </div>
           </div>
 
+          <div v-if="route.query.activity === 'quiz' && !activeQuiz" class="quiz-chat-entry"><span>围绕当前主题抽题，作答后自动分析错因。</span><button :disabled="sending" @click="sendQuick('出几道题考考我')">{{ currentTeaching?.topics.length ? '继续抽题' : '随机摸底测验' }}</button></div>
           <!-- 快捷提问 chips -->
           <div class="hp-chips">
             <button v-for="q in quickQuestions" :key="q" class="chip" @click="sendQuick(q)" :disabled="sending">
@@ -435,7 +303,7 @@
                 <SIcon name="target" :size="14" />再学一个技能点<SIcon name="right" :size="12" />
               </button>
               <button class="done-btn sandbox" @click="goSandboxChallenge">
-                <SIcon name="swords" :size="14" />去沙盒挑战 5★ 实战<SIcon name="right" :size="12" />
+                <SIcon name="swords" :size="14" />进入综合实战<SIcon name="right" :size="12" />
               </button>
               <button class="done-btn chat" @click="startFreeChat">
                 <SIcon name="msg" :size="14" />自由问答<SIcon name="right" :size="12" />
@@ -478,12 +346,12 @@
                 </button>
               </div>
             </div>
-            <div class="input-hint">回车发送 · Shift+回车换行 · AI 生成内容仅供参考</div>
+            <div class="input-hint">回车发送   Shift+回车换行   AI 生成内容仅供参考</div>
           </div>
         </div>
       </div>
     </div>
-  </div>
+    </Transition>
 
   <!-- ══ 动态难度曲线弹窗 ══ -->
   <el-dialog v-model="curveOpen" title="📈 动态难度曲线" width="580px" append-to-body class="curve-dialog">
@@ -524,18 +392,21 @@
       </div>
     </template>
   </el-dialog>
+  </div>
 
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, onDeactivated, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Microphone, Link, Picture, Promotion, ArrowRight, Collection,
+  Promotion, ArrowRight, Collection,
   Reading, CircleCheckFilled, WarningFilled, Loading,
 } from '@element-plus/icons-vue'
 import SIcon from '@/components/SIcon.vue'
-import InkMountain from '@/components/InkMountain.vue'
+import HomeLearningEntrances from '@/components/HomeLearningEntrances.vue'
+import FullscreenQuiz from '@/components/FullscreenQuiz.vue'
+import { useCooperationStore } from '@/stores/cooperation'
 import GuofengLandscape from '@/components/GuofengLandscape.vue'
 import LearnTranslate from '@/components/LearnTranslate.vue'
 import logoMark from '@/assets/lvyuan-logo.jpg'
@@ -554,6 +425,7 @@ import { useAppStore } from '@/stores/app'
 import { useOnboardingStore } from '@/stores/onboarding'
 import { useAccountsStore } from '@/stores/accounts'
 import { classifyError, ApiErrorType } from '@/api/client'
+import { cleanDisplayText } from '@/utils/displayText'
 import { ElMessage } from 'element-plus'
 
 const store = useAppStore()
@@ -561,6 +433,16 @@ const router = useRouter()
 const route = useRoute()
 const onb = useOnboardingStore()
 const accounts = useAccountsStore()
+const co = useCooperationStore()
+const assessmentSection = computed(() => ['portrait', 'diagnostic', 'plan'].includes(String(route.query.section)) ? String(route.query.section) : '')
+const practiceShortcuts = [
+  { label:'随机抽题', description:'从一组题开始', icon:'bookcheck', prompt:'出几道题考考我' },
+  { label:'按知识点练习', description:'聚焦一个知识点', icon:'book', path:'/app/knowledge-tree' },
+  { label:'错题巩固', description:'回到待巩固的内容', icon:'notebook', prompt:'根据我的错题和薄弱知识点，出题帮我巩固' },
+  { label:'阶段测验', description:'检验近期学习成果', icon:'target', prompt:'根据我目前学过的知识点，出一组阶段测验题' },
+]
+function practiceShortcut(item: { prompt?:string; path?:string }) { if (item.path) void router.push(item.path); else if (item.prompt) sendQuick(item.prompt) }
+async function startDiagnostic() { await router.push('/app/home?activity=quiz'); sendQuick('出几道题考考我') }
 function requireLearningAccount() {
   if (!accounts.isSignedIn) { accounts.openAccess(); return false }
   if (!onb.done) { accounts.openOnboarding(); return false }
@@ -589,7 +471,7 @@ function toggleVoiceRec() {
 }
 async function startVoiceRec() {
   if (!navigator.mediaDevices || !window.MediaRecorder) {
-    ElMessage.warning('当前环境不支持录音，请用 Chrome / Edge')
+    ElMessage.warning('当前环境不支持录音，请用 Chrome、Edge')
     return
   }
   try {
@@ -749,7 +631,7 @@ async function refreshCurve() {
 
 function goSandboxChallenge() {
   curveOpen.value = false
-  router.push('/app/training')
+  router.push('/app/training?focus=integrated')
 }
 
 // 圆润贝塞尔曲线（Catmull-Rom → 三次贝塞尔），难度变化连贯不折线
@@ -867,7 +749,7 @@ function toggleChain(i: number) {
 // ── 任务阶段提示条（T15） ──
 const PHASE_TEXT: Record<TaskPhase, string> = {
   queued: '排队中…',
-  working: '旅鸢正在处理（检索/生成材料）…',
+  working: '旅鸢正在处理（检索、生成材料）…',
   reviewing: '六帽审查中…',
   done: '完成',
   failed: '失败',
@@ -875,141 +757,15 @@ const PHASE_TEXT: Record<TaskPhase, string> = {
 const taskPhase = ref<TaskPhase | null>(null)
 const phaseText = computed(() => (taskPhase.value ? PHASE_TEXT[taskPhase.value] : ''))
 
-// ── 多 Agent 实时协同直播：每个 Agent 一行，可展开分工详情 / 思考内容 ──
 const liveTrace = ref<AgentTrace[]>([])
-const maStreamRef = ref<HTMLElement | null>(null)
-// agent 键 → 顶部拓扑阶段（六帽并入“审查”一个节点）
-const STAGE_MAP: Record<string, { key: string; short: string; icon: string }> = {
-  concierge: { key: 'concierge', short: '旅鸢', icon: 'sparkle' },
-  retrieval: { key: 'retrieval', short: '检索', icon: 'search' },
-  draft: { key: 'draft', short: '起草', icon: 'filetext' },
-  review: { key: 'review', short: '审查', icon: 'shield' },
-  white_hat: { key: 'review', short: '审查', icon: 'shield' },
-  black_hat: { key: 'review', short: '审查', icon: 'shield' },
-  green_hat: { key: 'review', short: '审查', icon: 'shield' },
-  yellow_hat: { key: 'review', short: '审查', icon: 'shield' },
-  red_hat: { key: 'review', short: '审查', icon: 'shield' },
-  blue_hat: { key: 'review', short: '审查', icon: 'shield' },
-  trainer: { key: 'trainer', short: '测评', icon: 'check' },
-  essay: { key: 'essay', short: '出题', icon: 'target' },
-  analyzer: { key: 'analyzer', short: '分析', icon: 'bookcheck' },
-  planner: { key: 'planner', short: '计划', icon: 'clock' },
-  profile: { key: 'profile', short: '画像', icon: 'user' },
-}
-const TRACE_ICONS: Record<string, string> = {
-  concierge: 'sparkle', retrieval: 'search', draft: 'filetext', review: 'shield',
-  white_hat: 'shield', black_hat: 'shield', green_hat: 'shield',
-  yellow_hat: 'shield', red_hat: 'shield', blue_hat: 'shield',
-  trainer: 'check', essay: 'target', analyzer: 'bookcheck', planner: 'clock', profile: 'user',
-}
-function traceIcon(agent: string): string {
-  return TRACE_ICONS[agent] || 'sparkle'
-}
-const _statusOf = (s: string) => s === 'failed' ? 'fail' : s === 'working' ? 'busy' : 'done'
-// 顶部拓扑：按阶段聚合（六帽一个“审查”节点）
-const liveStages = computed(() => {
-  const order: string[] = []
-  const last: Record<string, string> = {}
-  for (const ev of liveTrace.value) {
-    const meta = STAGE_MAP[ev.agent]
-    const key = meta ? meta.key : ev.agent
-    if (!(key in last)) order.push(key)
-    last[key] = ev.status
-  }
-  return order.map((key) => {
-    const meta = STAGE_MAP[key] || { key, short: key, icon: 'sparkle' }
-    return { agent: key, short: meta.short, icon: meta.icon, status: _statusOf(last[key]) }
-  })
-})
-// 主体列表：每个 Agent 聚合为一行（含该 Agent 的全部事件，展开可见）
-const liveAgents = computed(() => {
-  const grouped: Record<string, { agent: string; name: string; icon: string; events: AgentTrace[] }> = {}
-  const order: string[] = []
-  for (const ev of liveTrace.value) {
-    if (!grouped[ev.agent]) {
-      grouped[ev.agent] = { agent: ev.agent, name: ev.name, icon: traceIcon(ev.agent), events: [] }
-      order.push(ev.agent)
-    }
-    grouped[ev.agent].events.push(ev)
-  }
-  return order.map((k) => {
-    const g = grouped[k]
-    const last = g.events[g.events.length - 1]
-    return {
-      agent: g.agent,
-      name: g.name,
-      icon: g.icon,
-      count: g.events.length,
-      status: _statusOf(last.status),
-      lastRole: last.role,
-      events: g.events,
-    }
-  })
-})
-const liveDone = computed(() =>
-  liveTrace.value.filter((e) => e.status === 'done' || e.status === 'failed').length,
-)
-// 展开/折叠：默认展开，可单 Agent 折叠，也可一键全部收起
-const collapsedAgents = ref<Set<string>>(new Set())
-const allAgentsOpen = computed(() => liveAgents.value.length > 0 && collapsedAgents.value.size === 0)
-function isAgentOpen(agent: string): boolean {
-  return !collapsedAgents.value.has(agent)
-}
-function toggleAgent(agent: string) {
-  const next = new Set(collapsedAgents.value)
-  if (next.has(agent)) next.delete(agent)
-  else next.add(agent)
-  collapsedAgents.value = next
-}
-function toggleAllAgents() {
-  if (allAgentsOpen.value) collapsedAgents.value = new Set(liveAgents.value.map((a) => a.agent))
-  else collapsedAgents.value = new Set()
-}
-// 每条事件可再点开“思考内容”
-const openNotes = ref<Set<string>>(new Set())
-function noteKey(agent: string, ei: number): string {
-  return `${agent}#${ei}`
-}
-function noteOpen(agent: string, ei: number): boolean {
-  return openNotes.value.has(noteKey(agent, ei))
-}
-function toggleNote(agent: string, ei: number) {
-  const key = noteKey(agent, ei)
-  const next = new Set(openNotes.value)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
-  openNotes.value = next
-}
-// trace 更新 → 自动滚到面板底部（看最新一步）
-watch(liveTrace, async () => {
-  await nextTick()
-  const el = maStreamRef.value
-  if (el) el.scrollTop = el.scrollHeight
-})
 
 // 简易 markdown 渲染：转义 + 换行 + 加粗
 function formatContent(text: string): string {
-  return text
+  return cleanDisplayText(text)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
     .replace(/\n/g, '<br>')
 }
-
-// ── 思考动画 ──
-const thinkingTexts = ['正在思考…', '正在检索知识库…', '正在组织回答…']
-const thinkingIdx = ref(0)
-let thinkingTimer: ReturnType<typeof setInterval> | null = null
-
-function startThinkingAnim() {
-  thinkingIdx.value = 0
-  thinkingTimer = setInterval(() => {
-    thinkingIdx.value = (thinkingIdx.value + 1) % thinkingTexts.length
-  }, 1600)
-}
-function stopThinkingAnim() {
-  if (thinkingTimer) { clearInterval(thinkingTimer); thinkingTimer = null }
-}
-const thinkingText = computed(() => thinkingTexts[thinkingIdx.value])
 
 async function scrollToBottom() {
   await nextTick()
@@ -1019,10 +775,12 @@ async function scrollToBottom() {
 
 function handleNewSession() {
   if (!requireLearningAccount()) return
-  stopThinkingAnim()
   attachOpen.value = false
   store.newSession()
   messages.value = []
+  sending.value = false
+  taskPhase.value = null
+  liveTrace.value = []
   currentTeaching.value = null
   curve.value = null
   topicMastery.value = null
@@ -1060,12 +818,11 @@ function formatSessionTime(t: string | null): string {
   const now = new Date()
   const sameDay = d.toDateString() === now.toDateString()
   if (sameDay) return d.toTimeString().slice(0, 5)
-  return `${d.getMonth() + 1}/${d.getDate()}`
+  return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
 async function switchSession(s: SessionItem) {
   if (s.session_id === store.sessionId) { historyOpen.value = false; return }
-  stopThinkingAnim()
   attachOpen.value = false
   historyOpen.value = false
   store.sessionId = s.session_id
@@ -1101,6 +858,13 @@ async function switchSession(s: SessionItem) {
 const quizPending = ref(false)          // 答题 pending：点击选项 / 提交简答后置 true，收到下一条 assistant 消息清除
 const selectedChoice = ref('')          // 选择题本地选中字母（选中按钮金色填充 + 全部按钮 disabled）
 const essayAnswer = ref('')             // 简答题 textarea 输入
+const quizFullscreen = ref(false)
+onDeactivated(() => { quizFullscreen.value = false })
+const activeQuiz = computed(() => currentTeaching.value?.stage === 'practicing' ? currentTeaching.value.last_quiz : null)
+const lastFeedback = computed(() => [...messages.value].reverse().find(m => m.role === 'assistant')?.content || '')
+watch(() => activeQuiz.value?.question_id, id => { if (id) { quizFullscreen.value = true; if(!co.running) co.collapsed = true } })
+watch(currentTeaching, value => co.syncTeaching(value))
+function submitFullQuiz(content:string) { if (sending.value || !activeQuiz.value) return; inputText.value = content; handleSend() }
 const rubricOpen = ref(false)           // 简答参考答案要点展开/收起
 
 /** 解析选项字母：优先解析选项自带字母前缀（A./B、/C．），否则按位置回退生成 A-D 字母 */
@@ -1144,6 +908,10 @@ async function handleSend() {
   const content = inputText.value.trim()
   if (!content || sending.value) return
   if (!requireLearningAccount()) return
+  const token = co.begin(content.startsWith('我选') || content.startsWith('我的回答') ? '作答分析与反馈' : '管家与多智能体协作')
+  if (token === null) { ElMessage.info('当前协作仍在进行，请完成后再发送'); return }
+  const requestUser = store.userId
+  const requestSession = store.sessionId
   const focus = hardFocus.value
   hardFocus.value = null
   messages.value.push({ role: 'user', content })
@@ -1151,14 +919,16 @@ async function handleSend() {
   sending.value = true
   taskPhase.value = 'queued'
   liveTrace.value = []
-  startThinkingAnim()
   scrollToBottom()
   try {
     const result = await sendMessageWithPhase(
       { user_id: store.userId, session_id: store.sessionId, content, knowledge_point_id: focus || undefined },
-      (phase) => { taskPhase.value = phase },
-      (trace) => { liveTrace.value = trace },
+      (phase) => { if(store.userId === requestUser && store.sessionId === requestSession) taskPhase.value = phase },
+      (trace) => { if(store.userId === requestUser && store.sessionId === requestSession) liveTrace.value = trace; co.receive(trace, token) },
     )
+    if (store.userId !== requestUser || store.sessionId !== requestSession) return
+    co.receive(result.trace || [], token)
+    co.finish(token)
     messages.value.push({
       role: 'assistant',
       content: result.content || '(无响应)',
@@ -1177,18 +947,20 @@ async function handleSend() {
     if (result.teaching?.stage === 'practicing' && _tq?.difficulty_level) {
       const _lv = _tq.difficulty_level
       if (lastQuizLevel.value && _lv > lastQuizLevel.value) {
-        bumpTip.value = `★${lastQuizLevel.value} → ★${_lv} · 已根据掌握情况动态调整难度`
+        bumpTip.value = `★${lastQuizLevel.value} → ★${_lv}   已根据掌握情况动态调整难度`
         setTimeout(() => { bumpTip.value = '' }, 2600)
       }
       lastQuizLevel.value = _lv
     }
     loadState() // 对话可能改变掌握度/记忆，刷新
   } catch (e: any) {
+    co.finish(token, classifyError(e).message)
+    if (store.userId !== requestUser || store.sessionId !== requestSession) return
     const apiErr = e?._apiError || classifyError(e)
     if (apiErr.type === ApiErrorType.TIMEOUT) {
       messages.value.push({ role: 'assistant', content: '⏳ 请求超时 — AI 正在处理你的需求但耗时较长（生成训练材料需要多轮 LLM 审查），请稍后重试或简化需求。' })
     } else if (apiErr.type === ApiErrorType.NETWORK) {
-      messages.value.push({ role: 'assistant', content: '🔌 后端服务未连接 — 请确认已通过 start-dev.bat 启动服务，或检查 http://127.0.0.1:18000 是否可访问。' })
+      messages.value.push({ role: 'assistant', content: '🔌 后端服务未连接 — 请确认已通过 start-dev.bat 启动服务，或检查 本机 18000 端口是否可访问。' })
     } else if (apiErr.type === ApiErrorType.TASK_LOST) {
       messages.value.push({ role: 'assistant', content: `⚠️ 刚才那条请求被后端重启打断了（后端若用 --reload 热重载，重启会清空正在执行的任务）。请把「${content}」再发一次；若频繁出现，建议关闭后端热重载后重启服务。` })
     } else if (apiErr.type === ApiErrorType.SERVER_ERROR) {
@@ -1198,6 +970,7 @@ async function handleSend() {
       messages.value.push({ role: 'assistant', content: `❌ 请求失败: ${apiErr.message}。请检查网络和后端状态。` })
     }
   } finally {
+    if (store.userId !== requestUser || store.sessionId !== requestSession) return
     sending.value = false
     taskPhase.value = null
     liveTrace.value = []
@@ -1205,7 +978,6 @@ async function handleSend() {
     quizPending.value = false
     selectedChoice.value = ''
     rubricOpen.value = false
-    stopThinkingAnim()
     scrollToBottom()
   }
 }
@@ -1218,8 +990,8 @@ function sendQuick(q: string) {
 
 // ── 附件菜单 ──
 const attachItems = [
-  { label: '上传图片', desc: '拍照识别景点 / 文物', icon: 'image' },
-  { label: '上传 PDF', desc: '导游手册 / 培训资料', icon: 'filetext' },
+  { label: '上传图片', desc: '拍照识别景点、文物', icon: 'image' },
+  { label: '上传 PDF', desc: '导游手册、培训资料', icon: 'filetext' },
   { label: '上传文件', desc: 'Word / Excel / PPT', icon: 'clip' },
   { label: '拍照识别', desc: 'AI 即时识别标识牌', icon: 'camera' },
   { label: '发送位置', desc: '共享当前带团位置', icon: 'pin' },
@@ -1255,7 +1027,7 @@ function levelLabel(score: number): string {
 }
 
 const recommendText = computed(() => {
-  if (planNext.value) return `建议下一步：${planNext.value.bookTitle} · ${planNext.value.chapterTitle}（先让旅鸢讲一遍，再做真题）`
+  if (planNext.value) return `建议下一步：${planNext.value.bookTitle}   ${planNext.value.chapterTitle}（先让旅鸢讲一遍，再做真题）`
   if (weakTitles.value.length) return `重点攻克薄弱知识点：${weakTitles.value[0]}`
   if (userStats.value.attempted_skills === 0) return '还没有答题记录，先来一套摸底测试吧'
   return '掌握度不错！继续巩固，挑战更高难度'
@@ -1270,10 +1042,10 @@ const recommendAction = computed(() => {
 function goRecommend() {
   if (planNext.value) router.push('/app/knowledge')
   else if (weakTitles.value.length) router.push('/app/knowledge')
-  else if (userStats.value.attempted_skills === 0) router.push('/app/training')
-  else router.push('/app/training')
+  else if (userStats.value.attempted_skills === 0) router.push('/app/home?activity=quiz')
+  else router.push('/app/training?focus=integrated')
 }
-function goTraining() { router.push('/app/training') }
+function goTraining() { router.push('/app/training?focus=integrated') }
 function goKnowledge() { router.push('/app/knowledge') }
 
 async function loadState() {
@@ -1342,7 +1114,6 @@ const hardFocus = ref<string | null>(null)
 // ── 技能点专属会话：进入某技能点时切换到它的独立对话（首次自动开课；再进来直接接着） ──
 async function loadChatSession(sid: string) {
   store.activateSession(sid)
-  stopThinkingAnim()
   attachOpen.value = false
   messages.value = []
   currentTeaching.value = null
@@ -1459,8 +1230,14 @@ async function handlePendingSandbox() {
 .home-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .dash-scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .home-content { max-width: 720px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 24px; }
+.home-dashboard-sections { display:flex; flex-direction:column; gap:22px; }
+.practice-shortcuts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; button { display:flex; align-items:center; gap:11px; padding:20px 16px; min-width:0; border:1px solid #dce9f5; border-radius:12px 3px 12px 3px; background:#fff; color:#426a8a; font:inherit; text-align:left; cursor:pointer; transition:background .2s,border-color .2s,transform .2s; >svg:last-child { margin-left:auto; color:$color-text-secondary; flex-shrink:0; } &:hover:not(:disabled) { background:#eef7ff; border-color:#a2cbee; transform:translateY(-2px); } &:disabled { opacity:.5; cursor:wait; } &.featured { background:#edf6ff; border-color:#bcd9f2; color:$color-text-link; } } }
+.practice-shortcut-icon { color:$color-text-link; display:grid; place-items:center; flex-shrink:0; }
+.practice-shortcut-copy { min-width:0; b { display:block; font-size:13px; font-weight:500; line-height:1.6; } small { display:block; font-size:10px; color:$color-text-secondary; line-height:1.6; margin-top:5px; } }
+.practice-input-note { display:flex; align-items:center; gap:6px; color:$color-text-secondary; font-size:11px; }
+@media(max-width:700px) { .practice-shortcuts { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; } .recommend-bar { gap:12px; } .rec-btn { padding:9px 13px; font-size:12px; } }
 
-.backend-offline-banner { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: $radius-md; background: #fef3e2; border: 1px solid #f5d9a0; color: #a06315; font-size: 13px; }
+.backend-offline-banner { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: $radius-md; background: #fef3e2; border: 1px solid #f5d9a0; color: #8f5813; font-size: 13px; }
 
 .ai-card { border-radius: $radius-xl; overflow: hidden; background: $color-surface; border: 1px solid $color-border; box-shadow: $shadow-card-hover; }
 .ai-card-header { position: relative; padding: 20px 24px 16px; background: linear-gradient(135deg, $color-primary, $color-primary-light); overflow: hidden;
@@ -1469,14 +1246,14 @@ async function handlePendingSandbox() {
 .header-top { display: flex; justify-content: space-between; align-items: center; position: relative; }
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .header-actions .ph-history { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.28); color: $color-text-on-dark;
-  &:hover, &.open { border-color: $color-accent; color: $color-accent; background: rgba(51,143,242,.14); } }
+  &:hover, &.open { border-color: $color-accent; color: $color-text-link; background: rgba(51,143,242,.14); } }
 .header-actions .hist-count { color: #fff; background: rgba(51,143,242,.35); }
 .header-title { font-family: $font-serif; font-size: 17px; font-weight: 500; color: $color-text-on-dark; }
-.new-session-btn { border-color: rgba(255,255,255,.3); color: $color-text-on-dark; background: rgba(255,255,255,.08); &:hover { border-color: $color-accent; color: $color-accent; } }
+.new-session-btn { border-color: rgba(255,255,255,.3); color: $color-text-on-dark; background: rgba(255,255,255,.08); &:hover { border-color: $color-accent; color: $color-text-link; } }
 .header-sub { font-size: 12px; color: rgba(51, 143, 242, 0.8); margin-top: 4px; position: relative; }
 .ai-card-body { padding: 20px 24px; }
 .ai-input { width: 100%; border: none; outline: none; resize: none; font-size: 15px; font-family: $font-sans; color: $color-text; background: transparent; line-height: 1.7;
-  &::placeholder { color: #aaa; }
+  &::placeholder { color: $color-text-secondary; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .ai-toolbar { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 16px; border-top: 1px solid $color-border;
@@ -1492,12 +1269,12 @@ async function handlePendingSandbox() {
 }
 
 .section { .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .section-title { font-family: $font-serif; font-size: 16px; font-weight: 600; color: $color-primary; }
-  .section-more { display: flex; align-items: center; gap: 2px; border: none; background: none; font-size: 13px; color: $color-accent; cursor: pointer; }
+  .section-title { font-family: $font-serif; font-size: 16px; font-weight: 600; color: $color-text-link; }
+  .section-more { display: flex; align-items: center; gap: 2px; border: none; background: none; font-size: 13px; color: $color-text-link; cursor: pointer; }
 }
 .quick-chips { display: flex; flex-wrap: wrap; gap: 8px;
   .chip { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: $radius-md; border: 1px solid $color-border; background: $color-surface; color: $color-text; font-size: 14px; cursor: pointer; box-shadow: 0 1px 4px rgba(24, 58, 99, 0.05); transition: all 0.2s;
-    &:hover { border-color: $color-accent; color: $color-primary; }
+    &:hover { border-color: $color-accent; color: $color-text-link; }
     .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: $color-accent; flex-shrink: 0; }
   }
 }
@@ -1506,24 +1283,24 @@ async function handlePendingSandbox() {
 .stat-card { border-radius: $radius-xl; padding: 20px 12px; display: flex; flex-direction: column; align-items: center; text-align: center;
   &.dark { background: $color-primary; position: relative; overflow: hidden; }
   &.light { background: $color-surface; border: 1px solid $color-border; box-shadow: $shadow-card; }
-  .stat-card-icon { font-size: 22px; margin-bottom: 6px; color: $color-accent; &.flame { color: $color-accent; } }
-  .stat-card-value { font-size: 28px; font-weight: 700; color: $color-primary; .dark & { color: #FFFFFF; }
-    &.ok { color: #2d8a2d; } }
+  .stat-card-icon { font-size: 22px; margin-bottom: 6px; color: $color-text-link; &.flame { color: $color-text-link; } }
+  .stat-card-value { font-size: 28px; font-weight: 700; color: $color-text-link; .dark & { color: #FFFFFF; }
+    &.ok { color: #267326; } }
   .stat-card-label { font-size: 12px; color: $color-text-secondary; margin-top: 2px; .dark & { color: rgba(51, 143, 242, 0.9); } }
   .stat-card-unit { font-size: 11px; color: $color-text-secondary; .dark & { color: rgba(255, 255, 255, 0.45); } }
 }
 .circular-progress { position: relative; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 4px;
   .cp-svg { width: 52px; height: 52px; transform: rotate(-90deg); }
-  .cp-text { position: absolute; font-size: 12px; font-weight: 700; color: $color-primary; }
+  .cp-text { position: absolute; font-size: 12px; font-weight: 700; color: $color-text-link; }
 }
 
 .task-list { display: flex; flex-direction: column; gap: 8px; }
 .task-item { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: $radius-lg; background: $color-surface; border: 1px solid $color-border; box-shadow: $shadow-card; cursor: pointer; transition: box-shadow 0.2s;
   &:hover { box-shadow: $shadow-card-hover; }
 }
-.task-status { width: 40px; height: 40px; border-radius: $radius-md; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: $color-secondary-bg; color: $color-primary;
+.task-status { width: 40px; height: 40px; border-radius: $radius-md; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: $color-secondary-bg; color: $color-text-link;
   &.started { background: rgba(24, 58, 99, 0.08); }
-  &.done { background: $color-accent-light; color: $color-accent; }
+  &.done { background: $color-accent-light; color: $color-text-link; }
 }
 .task-info { flex: 1; min-width: 0; }
 .task-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -1534,13 +1311,13 @@ async function handlePendingSandbox() {
 .progress-fill { height: 100%; border-radius: 3px; background: $color-accent; transition: width 0.3s; }
 .progress-pct { font-size: 12px; color: $color-text-secondary; flex-shrink: 0; }
 .task-action { text-align: right; flex-shrink: 0; }
-.task-go { display: inline-flex; align-items: center; gap: 2px; border: none; background: none; font-size: 13px; font-weight: 500; color: $color-primary; cursor: pointer; }
+.task-go { display: inline-flex; align-items: center; gap: 2px; border: none; background: none; font-size: 13px; font-weight: 500; color: $color-text-link; cursor: pointer; }
 
 .recommend-bar { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-radius: $radius-xl; background: linear-gradient(135deg, $color-primary-d3, $color-primary, $color-primary-d10); overflow: hidden;
   .rec-ink { position: absolute; bottom: 0; right: 0; width: 50%; opacity: 0.5; }
 }
 .rec-info { position: relative; display: flex; flex-direction: column; gap: 4px; }
-.rec-tag { font-size: 12px; font-weight: 500; color: rgba(51, 143, 242, 0.9); }
+.rec-tag { font-size: 12px; font-weight: 500; color: $color-text-link; }
 .rec-title { font-family: $font-serif; font-size: 15px; font-weight: 600; color: #173e65; }
 .rec-desc { font-size: 12px; color: #456987; }
 .rec-btn { position: relative; display: flex; align-items: center; gap: 4px; padding: 10px 20px; border-radius: $radius-md; border: none; background: $color-accent; color: #FFFFFF; font-size: 14px; font-weight: 500; cursor: pointer; flex-shrink: 0; }
@@ -1559,7 +1336,7 @@ async function handlePendingSandbox() {
   font-family: $font-serif;
   font-size: 20px;
   font-weight: 700;
-  color: $color-primary;
+  color: $color-text-link;
 }
 .ph-right { display: flex; align-items: center; gap: 10px; }
 
@@ -1570,7 +1347,7 @@ async function handlePendingSandbox() {
   display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-family: $font-sans;
   padding: 5px 14px; border-radius: 20px; border: 1px solid rgba(24, 58, 99, 0.18);
   background: rgba(255, 255, 255, 0.7); color: $color-text-secondary; cursor: pointer; transition: all 0.15s;
-  &:hover, &.open { border-color: $color-accent; color: $color-primary; background: rgba(51, 143, 242, 0.08); }
+  &:hover, &.open { border-color: $color-accent; color: $color-text-link; background: rgba(51, 143, 242, 0.08); }
   .hist-count { font-size: 10px; font-weight: 700; color: #256CA7; background: rgba(51, 143, 242, 0.2);
     padding: 0 6px; border-radius: 999px; }
 }
@@ -1580,7 +1357,7 @@ async function handlePendingSandbox() {
   display: flex; flex-direction: column; background: #fff; border: 1px solid $color-border;
   border-radius: 14px; box-shadow: 0 10px 34px rgba(24, 58, 99, 0.16); overflow: hidden;
   .hist-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-    font-size: 12px; font-weight: 700; color: $color-primary; border-bottom: 1px solid $color-border; }
+    font-size: 12px; font-weight: 700; color: $color-text-link; border-bottom: 1px solid $color-border; }
   .hist-close { border: none; background: none; color: $color-text-secondary; cursor: pointer; padding: 2px; }
   .hist-body { overflow-y: auto; padding: 6px; flex: 1; }
   .hist-empty { padding: 26px 12px; text-align: center; font-size: 12.5px; color: $color-text-secondary; }
@@ -1608,13 +1385,13 @@ async function handlePendingSandbox() {
   border-radius: 20px;
   border: 1px solid rgba(24, 58, 99, 0.18);
   background: #fff;
-  color: $color-primary;
+  color: $color-text-link;
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
     border-color: $color-accent;
-    color: $color-accent;
+    color: $color-text-link;
     background: rgba(51, 143, 242, 0.06);
   }
 }
@@ -1760,7 +1537,7 @@ async function handlePendingSandbox() {
     gap: 8px;
     margin-bottom: 6px;
 
-    .cc-label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; color: $color-primary; flex-shrink: 0; }
+    .cc-label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; color: $color-text-link; flex-shrink: 0; }
     .cc-badge {
       display: inline-flex;
       align-items: center;
@@ -1770,7 +1547,7 @@ async function handlePendingSandbox() {
       padding: 2px 8px;
       border-radius: 999px;
 
-      &.pass { background: rgba(45, 138, 45, 0.1); color: #2d8a2d; border: 1px solid rgba(45, 138, 45, 0.25); }
+      &.pass { background: rgba(45, 138, 45, 0.1); color: #267326; border: 1px solid rgba(45, 138, 45, 0.25); }
       &.revised { background: rgba(51, 143, 242, 0.18); color: #256CA7; border: 1px solid rgba(51, 143, 242, 0.4); }
     }
     .cc-verdict {
@@ -1799,7 +1576,7 @@ async function handlePendingSandbox() {
       flex-shrink: 0;
       transition: all 0.15s;
 
-      &:hover { color: $color-accent; background: $color-accent-light; }
+      &:hover { color: $color-text-link; background: $color-accent-light; }
     }
   }
 
@@ -1887,7 +1664,7 @@ async function handlePendingSandbox() {
       font-size: 12px;
       font-weight: 600;
       letter-spacing: 0.5px;
-      color: $color-primary;
+      color: $color-text-link;
 
       .ma-live-dot {
         width: 7px; height: 7px;
@@ -1910,7 +1687,7 @@ async function handlePendingSandbox() {
       font-size: 11px;
       color: $color-text-secondary;
 
-      b { color: $color-primary; font-weight: 600; }
+      b { color: $color-text-link; font-weight: 600; }
     }
   }
 
@@ -1942,11 +1719,11 @@ async function handlePendingSandbox() {
 
       &.busy {
         border-color: $color-accent;
-        color: $color-primary;
+        color: $color-text-link;
         background: #F8FBFF;
         box-shadow: 0 0 0 2px rgba(51, 143, 242, 0.18);
 
-        .ma-actor-ico { color: $color-accent; }
+        .ma-actor-ico { color: $color-text-link; }
       }
       &.done {
         border-color: $color-primary;
@@ -1995,7 +1772,7 @@ async function handlePendingSandbox() {
       .ma-item-ico {
         display: inline-flex;
         flex-shrink: 0;
-        color: $color-primary;
+        color: $color-text-link;
         opacity: 0.75;
       }
       .ma-item-name { font-weight: 600; color: $color-text; flex-shrink: 0; }
@@ -2007,7 +1784,7 @@ async function handlePendingSandbox() {
         white-space: nowrap;
         max-width: 170px;
       }
-      .ma-item-st { margin-left: auto; display: inline-flex; flex-shrink: 0; color: #2d8a45; }
+      .ma-item-st { margin-left: auto; display: inline-flex; flex-shrink: 0; color: #26733a; }
       .ma-item-wait {
         display: inline-flex;
         gap: 2px;
@@ -2023,18 +1800,18 @@ async function handlePendingSandbox() {
       }
 
       // 帽子色调：通过 agent 类名识别
-      &.white_hat .ma-item-ico { color: #7a8794; }
+      &.white_hat .ma-item-ico { color: $color-text-secondary; }
       &.black_hat .ma-item-ico { color: #333b47; }
-      &.green_hat .ma-item-ico { color: #2d8a45; }
-      &.yellow_hat .ma-item-ico { color: #b8953a; }
-      &.red_hat .ma-item-ico { color: #c0504d; }
+      &.green_hat .ma-item-ico { color: #26733a; }
+      &.yellow_hat .ma-item-ico { color: #796226; }
+      &.red_hat .ma-item-ico { color: #a74543; }
       &.blue_hat .ma-item-ico { color: #3468c9; }
-      &.concierge .ma-item-ico { color: $color-accent; opacity: 1; }
+      &.concierge .ma-item-ico { color: $color-text-link; opacity: 1; }
 
       &.working {
         background: rgba(51, 143, 242, 0.08);
       }
-      &.failed .ma-item-st { color: #c0504d; }
+      &.failed .ma-item-st { color: #a74543; }
     }
   }
 }
@@ -2162,10 +1939,10 @@ async function handlePendingSandbox() {
       .ma-actor-ico { display: inline-flex; color: $color-text-secondary; }
       &.busy {
         border-color: $color-accent;
-        color: $color-primary;
+        color: $color-text-link;
         background: #F8FBFF;
         box-shadow: 0 0 0 2px rgba(51, 143, 242, 0.18);
-        .ma-actor-ico { color: $color-accent; }
+        .ma-actor-ico { color: $color-text-link; }
       }
       &.done {
         border-color: $color-primary;
@@ -2182,7 +1959,7 @@ async function handlePendingSandbox() {
           color: #fff;
         }
       }
-      &.fail { border-color: rgba(192, 80, 77, 0.6); color: #c0504d; }
+      &.fail { border-color: rgba(192, 80, 77, 0.6); color: #a74543; }
       .ma-actor-spin {
         position: absolute;
         top: -3px; right: -3px;
@@ -2246,12 +2023,12 @@ async function handlePendingSandbox() {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        i { font-style: normal; color: $color-accent-d10; font-weight: 600; }
+        i { font-style: normal; color: $color-text-link; font-weight: 600; }
       }
     }
     .ma-agent-st { margin-left: auto; display: inline-flex; flex-shrink: 0; }
-    .ma-ok { display: inline-flex; color: #2d8a45; }
-    .ma-ng { display: inline-flex; color: #c0504d; }
+    .ma-ok { display: inline-flex; color: #26733a; }
+    .ma-ng { display: inline-flex; color: #a74543; }
 
     &.white_hat .ma-agent-ico { background: #7a8794; }
     &.black_hat .ma-agent-ico { background: #333b47; }
@@ -2268,7 +2045,7 @@ async function handlePendingSandbox() {
     &.profile .ma-agent-ico { background: #5a7a8f; }
 
     &.busy .ma-agent-row { background: rgba(51, 143, 242, 0.07); }
-    &.fail .ma-agent-role { color: #c0504d; }
+    &.fail .ma-agent-role { color: #a74543; }
 
     .ma-agent-body {
       padding: 2px 8px 9px 50px;
@@ -2311,9 +2088,9 @@ async function handlePendingSandbox() {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .ma-ev-st { margin-left: auto; display: inline-flex; flex-shrink: 0; color: #2d8a45; }
+        .ma-ev-st { margin-left: auto; display: inline-flex; flex-shrink: 0; color: #26733a; }
       }
-      &.failed .ma-ev-st { color: #c0504d; }
+      &.failed .ma-ev-st { color: #a74543; }
 
       .ma-think {
         align-self: flex-start;
@@ -2321,7 +2098,7 @@ async function handlePendingSandbox() {
         align-items: center;
         gap: 4px;
         font-size: 11.5px;
-        color: $color-primary;
+        color: $color-text-link;
         background: $color-accent-light;
         border: none;
         padding: 2px 9px;
@@ -2375,10 +2152,10 @@ async function handlePendingSandbox() {
   font-size: 12.5px;
   flex-shrink: 0;
 
-  .tb-label { font-weight: 700; color: $color-primary; letter-spacing: 0.5px; }
+  .tb-label { font-weight: 700; color: $color-text-link; letter-spacing: 0.5px; }
   .tb-topic { font-weight: 600; color: $color-text; }
-  .tb-stage { color: $color-accent; background: rgba(51, 143, 242, 0.16); padding: 2px 10px; border-radius: 999px; }
-  .tb-depth { color: $color-primary; background: rgba(24, 58, 99, 0.08); padding: 2px 10px; border-radius: 999px; }
+  .tb-stage { color: $color-text-link; background: rgba(51, 143, 242, 0.16); padding: 2px 10px; border-radius: 999px; }
+  .tb-depth { color: $color-text-link; background: rgba(24, 58, 99, 0.08); padding: 2px 10px; border-radius: 999px; }
   .tb-count { color: $color-text-secondary; margin-left: auto; }
 }
 
@@ -2392,12 +2169,12 @@ async function handlePendingSandbox() {
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(45, 138, 45, 0.08);
-  color: #2d8a2d;
+  color: #267326;
   border: 1px solid rgba(45, 138, 45, 0.25);
 
   &.reteach {
     background: rgba(201, 138, 44, 0.12);
-    color: #9a6b1f;
+    color: #865d1b;
     border-color: rgba(201, 138, 44, 0.35);
   }
 }
@@ -2422,7 +2199,7 @@ async function handlePendingSandbox() {
 
 .quiz-diff { display: inline-flex; align-items: center; gap: 1px; margin-left: 8px; }
 .qstar { color: #B8D8F5; font-size: 13px; line-height: 1; }
-.qstar.on { color: #338FF2; }
+.qstar.on { color: $color-text-link; }
 
     .quiz-type-badge {
       font-size: 11px;
@@ -2431,7 +2208,7 @@ async function handlePendingSandbox() {
       border-radius: 999px;
       flex-shrink: 0;
 
-      &.choice { background: rgba(24, 58, 99, 0.1); color: $color-primary; border: 1px solid rgba(24, 58, 99, 0.22); }
+      &.choice { background: rgba(24, 58, 99, 0.1); color: $color-text-link; border: 1px solid rgba(24, 58, 99, 0.22); }
       &.essay { background: rgba(51, 143, 242, 0.18); color: #256CA7; border: 1px solid rgba(51, 143, 242, 0.42); }
     }
     .quiz-kp-title {
@@ -2454,7 +2231,7 @@ async function handlePendingSandbox() {
       border: 1px solid rgba(24, 58, 99, 0.12);
       flex-shrink: 0;
 
-      &.done { background: rgba(45, 138, 45, 0.1); color: #2d8a2d; border-color: rgba(45, 138, 45, 0.25); }
+      &.done { background: rgba(45, 138, 45, 0.1); color: #267326; border-color: rgba(45, 138, 45, 0.25); }
     }
   }
 
@@ -2496,7 +2273,7 @@ async function handlePendingSandbox() {
         font-size: 12px;
         font-weight: 700;
         background: rgba(24, 58, 99, 0.08);
-        color: $color-primary;
+        color: $color-text-link;
         flex-shrink: 0;
         transition: all 0.15s;
       }
@@ -2540,7 +2317,7 @@ async function handlePendingSandbox() {
       cursor: pointer;
       transition: color 0.15s;
 
-      &:hover { color: $color-accent; }
+      &:hover { color: $color-text-link; }
     }
     .quiz-rubric {
       margin: 0;
@@ -2608,7 +2385,7 @@ async function handlePendingSandbox() {
     border-radius: 20px;
     border: 1px solid rgba(24, 58, 99, 0.15);
     background: rgba(255, 255, 255, 0.85);
-    color: $color-primary;
+    color: $color-text-link;
     cursor: pointer;
     transition: all 0.15s;
     font-family: $font-sans;
@@ -2635,7 +2412,7 @@ async function handlePendingSandbox() {
   border-radius: 999px;
   background: rgba(24, 58, 99, 0.06);
   border: 1px solid rgba(24, 58, 99, 0.12);
-  color: $color-primary;
+  color: $color-text-link;
   font-size: 12.5px;
   flex-shrink: 0;
 
@@ -2676,7 +2453,7 @@ async function handlePendingSandbox() {
   line-height: 1.6;
   background: transparent;
 
-  &::placeholder { color: #B5B0A6; }
+  &::placeholder { color: $color-text-secondary; }
 }
 .input-actions {
   display: flex;
@@ -2694,8 +2471,8 @@ async function handlePendingSandbox() {
     display: flex; align-items: center; justify-content: center;
     transition: all 0.15s;
 
-    &:hover:not(:disabled) { background: rgba(24, 58, 99, 0.06); color: $color-primary; }
-    &.on { background: rgba(51, 143, 242, 0.15); color: $color-accent; }
+    &:hover:not(:disabled) { background: rgba(24, 58, 99, 0.06); color: $color-text-link; }
+    &.on { background: rgba(51, 143, 242, 0.15); color: $color-text-link; }
     &:disabled { opacity: 0.5; }
   }
   .ia-attach { position: relative; }
@@ -2751,7 +2528,7 @@ async function handlePendingSandbox() {
 .input-hint {
   text-align: center;
   font-size: 10.5px;
-  color: #B5B0A6;
+  color: $color-text-secondary;
   margin-top: 8px;
 }
 
@@ -2761,7 +2538,7 @@ async function handlePendingSandbox() {
   padding: 3px 10px;
   font-size: 12px;
   line-height: 1;
-  color: #338FF2;
+  color: $color-text-link;
   background: #fff;
   border: 1px solid rgba(24,58,99,.25);
   border-radius: 12px;
@@ -2770,7 +2547,7 @@ async function handlePendingSandbox() {
 }
 .curve-btn:hover { background: #eef4fb; }
 .curve-dialog .el-dialog__body { padding-top: 8px; }
-.curve-loading { text-align: center; color: #888; padding: 30px 0; }
+.curve-loading { text-align: center; color: $color-text-secondary; padding: 30px 0; }
 .curve-wrap { display: flex; flex-direction: column; }
 .curve-svg { width: 100%; height: auto; background: #fbfdff; border: 1px solid #e6eef7; border-radius: 10px; }
 .grid-line { stroke: #e3ebf4; stroke-width: 1; }
@@ -2784,7 +2561,7 @@ async function handlePendingSandbox() {
 .curve-legend .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:-1px; }
 .curve-status { margin-top: 14px; display:flex; align-items:center; justify-content:space-between; gap:12px;
   background:#f4f8fd; border:1px solid #dfe9f5; border-radius:10px; padding:10px 14px; }
-.curve-status-text { font-size: 13px; color: #338FF2; line-height:1.5; }
+.curve-status-text { font-size: 13px; color: $color-text-link; line-height:1.5; }
 
 
 /* ── 动态难度曲线按钮（更醒目） ── */
@@ -2814,14 +2591,14 @@ async function handlePendingSandbox() {
   border-radius: 14px;
   box-shadow: 0 4px 14px rgba(51,143,242,.18);
 }
-.done-title { font-size: 15px; font-weight: 700; color: #b26a00; }
-.done-sub { font-size: 12px; color: #8a7a5a; margin: 4px 0 10px; }
+.done-title { font-size: 15px; font-weight: 700; color: #925700; }
+.done-sub { font-size: 12px; color: #716349; margin: 4px 0 10px; }
 .done-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .done-btn {
   flex: 1 1 150px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 9px 10px;
-  font-size: 13px; color: #338FF2;
+  font-size: 13px; color: $color-text-link;
   background: #fff; border: 1px solid #d7e3f2; border-radius: 10px;
   cursor: pointer; transition: all .12s ease;
 }
@@ -2856,13 +2633,13 @@ async function handlePendingSandbox() {
 
 
 /* ── 对话顶部掌握度进度条 ── */
-.tb-mastery { display:inline-flex; align-items:center; gap:6px; margin-left:10px; font-size:12px; color:#338FF2; }
-.tb-mastery b { color:#7a5af8; }
+.tb-mastery { display:inline-flex; align-items:center; gap:6px; margin-left:10px; font-size:12px; color:$color-text-link; }
+.tb-mastery b { color:#684dd3; }
 .tb-mbar { display:inline-block; width:64px; height:6px; background:#e6e9f4; border-radius:3px; overflow:hidden; vertical-align:-1px; }
 .tb-mbar u { display:block; height:100%; background:linear-gradient(90deg,#2f6fae,#7a5af8); border-radius:3px; }
 /* ── 完成框 AI 评分 ── */
-.done-mastery { display:flex; gap:18px; flex-wrap:wrap; margin:8px 0 2px; font-size:13px; color:#338FF2; }
-.done-mastery b { color:#7a5af8; }
+.done-mastery { display:flex; gap:18px; flex-wrap:wrap; margin:8px 0 2px; font-size:13px; color:$color-text-link; }
+.done-mastery b { color:#684dd3; }
 
 
 /* 顶部条图标与文字垂直对齐 */
@@ -2871,8 +2648,13 @@ async function handlePendingSandbox() {
 
 
 /* 语音输入 */
-.ia-btn.on { color: #338FF2; }
+.ia-btn.on { color: $color-text-link; }
 .home-mic-tag { font-size: 11px; color: #256CA7; background: rgba(51,143,242,.12);
   border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
 
+.quiz-entry-card { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:22px 25px; background:#fff; border:1px solid #d9e8f6; border-radius:17px 5px 17px 5px; color:#2b5678; h2 { font-size:18px; margin:0 0 7px; } p { font-size:13px; color:$color-text-secondary; margin:0; line-height:1.8; } button { display:flex; align-items:center; gap:9px; border:0; color:#fff; background:#338ff2; padding:12px 18px; border-radius:10px; font-size:13px; cursor:pointer; white-space:nowrap; } }
+.quiz-chat-entry { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:10px 0; padding:12px 17px; background:#f1f8ff; border:1px solid #dcebf9; border-radius:11px; color:$color-text-secondary; font-size:12px; button { border:0; color:$color-text-link; background:#fff; border-radius:7px; padding:9px 12px; cursor:pointer; flex-shrink:0; } }
+.quiz-summary { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px!important; >div { min-width:0; } p { color:#436581; font-size:14px; line-height:1.8; margin:11px 0 0; } button { display:flex; align-items:center; gap:6px; white-space:nowrap; background:#eef7ff; border:1px solid #cfe5f8; color:$color-text-link; padding:10px 14px; border-radius:9px; cursor:pointer; font-size:12px; &:disabled { opacity:.55; cursor:default; } } }
+.chat-workflow-btn { margin-left:12px; color:$color-text-link; background:#eef7ff; border:1px solid #dcebf8; border-radius:7px; padding:7px 10px; font-size:11px; cursor:pointer; }
+@media(max-width:600px) { .quiz-entry-card,.quiz-summary { align-items:stretch; flex-direction:column; } .quiz-entry-card button { justify-content:center; } }
 </style>

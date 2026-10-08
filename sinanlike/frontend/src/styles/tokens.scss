@@ -20,7 +20,9 @@ $color-muted-bg: #EAF3FC;       // 更浅灰背景
 
 // ── 文字色 ──
 $color-text: #203B53;           // 主文字
-$color-text-secondary: #70869B; // 次要文字
+$color-text-secondary: #42586E; // 次要文字，浅蓝与白底保持清晰
+$color-text-muted: #526477;     // 辅助说明与输入提示
+$color-text-link: #1D5E99;      // 浅色背景上的蓝色文字
 $color-text-on-dark: rgba(255, 255, 255, 0.9);
 $color-text-on-dark-muted: rgba(255, 255, 255, 0.55);
 
@@ -62,5 +64,8 @@ $sidebar-collapsed-width: 64px;
   --el-border-color: #{$color-border};
   --el-text-color-primary: #{$color-text};
   --el-text-color-regular: #{$color-text-secondary};
+  --el-text-color-secondary: #{$color-text-secondary};
+  --el-text-color-placeholder: #{$color-text-muted};
+  --el-disabled-text-color: #{$color-text-muted};
   --el-font-family: #{$font-sans};
 }

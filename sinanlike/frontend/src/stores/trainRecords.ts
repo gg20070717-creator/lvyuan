@@ -1,4 +1,4 @@
-/* 旅鸢 · 训练成绩 store（历史记录 + 场景最高分回写 + localStorage 持久化） */
+/* 旅鸢   训练成绩 store（历史记录 + 场景最高分回写 + localStorage 持久化） */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { SCENES, NARR_SCENES, ROUTE_SCENES } from '@/data/content'

@@ -142,10 +142,12 @@ def test_sandbox_list_templates_and_mode_filter(tmp_path):
     svc = _make_service(tmp_path)
     all_t = svc.list_templates()
     assert len(all_t) >= 7
-    assert {t["mode"] for t in all_t} == {"scenario", "narrate", "fullflow"}
+    assert {t["mode"] for t in all_t} == {"scenario", "narrate", "fullflow", "communication"}
     scenario = svc.list_templates(mode="scenario")
     assert all(t["mode"] == "scenario" for t in scenario)
-    assert all(t["stage_count"] >= 3 for t in all_t)
+    # 全流程分课已有单阶段、双阶段模板；每个场景都必须有可执行阶段。
+    assert all(t["stage_count"] >= 1 for t in all_t)
+    assert all(t["stage_count"] == 3 for t in all_t if t["mode"] == "communication")
 
 
 def test_sandbox_get_template_unknown_raises(tmp_path):

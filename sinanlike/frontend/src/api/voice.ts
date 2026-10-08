@@ -68,7 +68,7 @@ export function evaluateVoice(payload: { scene_id: string; transcript: string; h
   }>
 }
 
-// ── 学习翻译 / 多语种发音（旅鸢讲解 · 个性化资源） ──
+// ── 学习翻译 / 多语种发音（旅鸢讲解   个性化资源） ──
 export function translateLearnText(
   text: string,
   lang: string,

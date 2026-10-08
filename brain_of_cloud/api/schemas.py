@@ -38,6 +38,7 @@ class TaskResponse(BaseModel):
     assets: list[dict[str, Any]] = []
     trace: list[dict[str, Any]] = []  # 实时多 Agent 工作轨迹（agent_trace）
     teaching: dict[str, Any] | None = None
+    payload: dict[str, Any] | None = None  # 实战异步任务结果；原对话响应保持兼容
 
 
 

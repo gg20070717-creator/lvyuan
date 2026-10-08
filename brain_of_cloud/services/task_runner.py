@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import inspect
+import copy
 import threading
 import time
 import uuid
@@ -118,8 +119,10 @@ class TaskRunner:
             if record is not None:
                 ev = dict(event or {})
                 ev.setdefault("ts", time.time())
+                ev.setdefault("seq", len(record.trace))
                 record.trace.append(ev)
 
     def get(self, task_id: str) -> TaskRecord | None:
         with self._lock:
-            return self._tasks.get(task_id)
+            record = self._tasks.get(task_id)
+            return copy.deepcopy(record) if record is not None else None

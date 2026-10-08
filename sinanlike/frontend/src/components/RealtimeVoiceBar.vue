@@ -1,7 +1,7 @@
 <template>
   <div class="rvc">
     <div class="rvc-bar">
-      <span class="rvc-tag">实时语音 · {{ langLabel }}</span>
+      <span class="rvc-tag">实时语音   {{ langLabel }}</span>
       <span v-if="voice" class="rvc-voice">音色 {{ voice }}</span>
       <span class="rvc-status" :class="{ on: connected }">{{ statusText }}</span>
       <span class="rvc-spacer"></span>
@@ -159,11 +159,11 @@ function playPcm24k(b64: string) {
 function handleEvent(m: any) {
   const t = m.type || ''
   if (t === 'session.meta') {
-    statusText.value = `已连接 · ${m.language || ''}`
+    statusText.value = `已连接   ${m.language || ''}`
   } else if (t === 'ready') {
     connected.value = true
     connecting.value = false
-    statusText.value = '对话中 · 直接对麦克风说话'
+    statusText.value = '对话中   直接对麦克风说话'
   } else if (t === 'response.audio.delta') {
     if (m.delta) playPcm24k(m.delta)
   } else if (t === 'response.audio_transcript.delta') {
@@ -215,7 +215,7 @@ async function connect() {
     if (!connected.value) {
       connecting.value = false
       statusText.value = '连接超时'
-      ElMessage.error('语音连接超时：请确认后端已启动（http://127.0.0.1:18000）')
+      ElMessage.error('语音连接超时：请确认后端已启动（本机 18000 端口）')
       cleanup()
     }
   }, 12000)
@@ -266,15 +266,15 @@ onUnmounted(() => {
   background: rgba(51,143,242,.14); border: 1px solid rgba(51,143,242,.35);
   padding: 4px 10px; border-radius: 20px; }
 .rvc-voice { font-size: 12px; color: #666; }
-.rvc-status { font-size: 12px; color: #999; }
-.rvc-status.on { color: #3fa45b; }
+.rvc-status { font-size: 12px; color: #42586e; }
+.rvc-status.on { color: #2c7240; }
 .rvc-spacer { flex: 1; }
 .rvc-btn { border: 0; border-radius: 9px; padding: 6px 13px; font-size: 12.5px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 5px; }
 .rvc-btn.main { background: linear-gradient(135deg, #338FF2, #b28c46); color: #fff; }
-.rvc-btn.stop { background: #EDF5FD; color: #b3543f; }
+.rvc-btn.stop { background: #EDF5FD; color: #a14b39; }
 .rvc-btn:disabled { opacity: .55; cursor: not-allowed; }
-.rvc-hint { font-size: 11.5px; color: #a49a86; }
+.rvc-hint { font-size: 11.5px; color: #42586e; }
 .rvc-row { display: flex; gap: 8px; }
 .rvc-input { flex: 1; border: 1px solid #C7DCF1; border-radius: 10px; padding: 9px 12px;
   font-size: 13px; outline: none; background: #fff; }

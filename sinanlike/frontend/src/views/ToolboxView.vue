@@ -11,7 +11,7 @@
         <template v-if="!activeTool">
           <div class="tb-feature grad">
             <div class="ic"><SIcon name="globe" :size="22" color="#338FF2" /></div>
-            <div class="ft"><div class="h">AI 智能导游助手</div><div class="s">实时解答游客问题 · 多语言支持</div></div>
+            <div class="ft"><div class="h">AI 智能导游助手</div><div class="s">实时解答游客问题   多语言支持</div></div>
             <SIcon name="right" :size="16" color="rgba(51,143,242,0.7)" />
           </div>
           <div class="tb-grid">
@@ -29,7 +29,7 @@
           <div class="tool-head">
             <div class="ic" :style="{ background: activeToolObj.bg }"><SIcon :name="activeToolObj.i" :size="24" :color="activeToolObj.c" /></div>
             <div class="th"><div class="t">{{ activeToolObj.l }}</div><div class="d">{{ activeToolObj.d }}</div></div>
-            <span class="ai-badge" :style="{ color: activeToolObj.c, background: activeToolObj.bg, border: `1px solid ${activeToolObj.c}33` }">AI 驱动</span>
+            <span class="ai-badge" :style="{ background: activeToolObj.bg, border: `1px solid ${activeToolObj.c}33` }">AI 驱动</span>
             <span v-if="toolDataStatus" class="tb-demo-badge" :class="{ live: toolDataStatus!.live }">{{ toolDataStatus!.txt }}</span>
           </div>
 
@@ -41,7 +41,7 @@
                 <button class="tb-swap" @click="tbSwapLang" title="交换"><SIcon name="right" :size="15" /></button>
                 <select class="tb-select" v-model="tr.tgt"><option v-for="l in trLangs" :key="l">{{ l }}</option></select>
               </div></div>
-            <div class="tb-block"><div class="lb"><SIcon name="msg" :size="12" color="#3B82F6" /> 常用接待短语 · 点选即译</div>
+            <div class="tb-block"><div class="lb"><SIcon name="msg" :size="12" color="#3B82F6" /> 常用接待短语   点选即译</div>
               <div class="tb-row">
                 <span v-for="(p, i) in ((PHRASES as any)[tr.tgt] || (PHRASES as any)['英语'])" :key="p[0]" class="tb-tag" :class="{ sel: tr.pick === i }" @click="tbPickPhrase(i)">{{ p[0] }}</span>
               </div></div>
@@ -52,18 +52,18 @@
 
           <!-- 2 礼仪检查 -->
           <template v-if="activeTool === 'etiquette'">
-            <div class="tb-block"><div class="lb"><SIcon name="shield" :size="12" color="#8B5CF6" /> 接待礼仪自查清单 · 勾选本次做到的项</div>
+            <div class="tb-block"><div class="lb"><SIcon name="shield" :size="12" color="#8B5CF6" /> 接待礼仪自查清单   勾选本次做到的项</div>
               <div class="tb-list">
                 <div v-for="(it, i) in ETQ_ITEMS" :key="it[0]" class="tb-check" :class="{ on: etq.checked[i] }" @click="tbEtqToggle(i)">
                   <span class="cb"><SIcon v-if="etq.checked[i]" name="check" :size="11" :stroke-width="3.5" color="#fff" /></span>
-                  <span class="txt">{{ it[0] }}<span class="sub"> · {{ it[1] }}</span></span>
+                  <span class="txt">{{ it[0] }}<span class="sub">   {{ it[1] }}</span></span>
                 </div>
               </div>
               <div class="tb-row" style="margin-top:14px">
                 <button class="tb-btn" style="background:linear-gradient(135deg,#8B5CF6,#7C3AED)" @click="tbEtqScore"><SIcon name="star" :size="12" color="#fff" /> 生成礼仪评估</button>
               </div></div>
             <div v-if="etq.out" class="tb-block"><div class="lb"><SIcon name="star" :size="12" color="#8B5CF6" /> 评估结果</div>
-              <div class="tb-result"><span class="big">{{ etq.out.score }}</span> 分 · {{ etq.out.grade }}<br>{{ etq.out.note }}</div></div>
+              <div class="tb-result"><span class="big">{{ etq.out.score }}</span> 分   {{ etq.out.grade }}<br>{{ etq.out.note }}</div></div>
           </template>
 
           <!-- 3 行程规划 -->
@@ -78,7 +78,7 @@
               <div class="tb-row" style="margin-top:14px">
                 <button class="tb-btn" style="background:linear-gradient(135deg,#10B981,#059669)" @click="tbGenItinerary"><SIcon name="sparkle" :size="12" color="#fff" /> 生成行程</button>
               </div></div>
-            <div v-if="itn.out" class="tb-block"><div class="lb"><SIcon name="check" :size="12" color="#10B981" /> 智能行程 · {{ itn.days }}天 · {{ itn.theme }}</div>
+            <div v-if="itn.out" class="tb-block"><div class="lb"><SIcon name="check" :size="12" color="#10B981" /> 智能行程   {{ itn.days }}天   {{ itn.theme }}</div>
               <div class="tb-result">{{ itn.out }}</div>
               <div class="tb-row" style="margin-top:10px"><button class="tb-btn" @click="tbCopy(itn.out)"><SIcon name="clip" :size="12" color="#fff" /> 复制行程</button></div></div>
           </template>
@@ -101,11 +101,11 @@
 
           <!-- 5 文化禁忌查询 -->
           <template v-if="activeTool === 'taboo'">
-            <div class="tb-block"><div class="lb"><SIcon name="globe" :size="12" color="#F59E0B" /> 选择客源国 / 地区</div>
+            <div class="tb-block"><div class="lb"><SIcon name="globe" :size="12" color="#F59E0B" /> 选择客源国、地区</div>
               <div class="tb-row">
                 <span v-for="c in Object.keys(TABOO_DB)" :key="c" class="tb-tag" :class="{ sel: taboo.country === c }" @click="taboo.country = c">{{ c }}</span>
               </div></div>
-            <div class="tb-block"><div class="lb"><SIcon name="warn" :size="12" color="#F59E0B" /> {{ taboo.country }} · 接待禁忌要点</div>
+            <div class="tb-block"><div class="lb"><SIcon name="warn" :size="12" color="#F59E0B" /> {{ taboo.country }}   接待禁忌要点</div>
               <div class="tb-list">
                 <div v-for="it in (TABOO_DB as any)[taboo.country]" :key="it.t" class="tb-item">
                   <div class="ic2" style="background:rgba(245,158,11,.1)"><SIcon name="warn" :size="16" color="#F59E0B" /></div>
@@ -125,12 +125,12 @@
                 <select class="tb-select" v-model="curr.to"><option v-for="c in CURR" :key="c[0]" :value="c[0]">{{ c[1] }}</option></select>
               </div>
               <div class="tb-result" style="margin-top:14px"><span class="big">{{ currResult }}</span> {{ (CURR.find(c => c[0] === curr.to) || [])[1] }}<br>
-                <span class="rate-line">1 {{ (CURR.find(c => c[0] === curr.from) || [])[1] }} ≈ {{ currRateLine }} {{ (CURR.find(c => c[0] === curr.to) || [])[1] }} · {{ currSrc === 'live' ? '实时汇率（open.er-api.com）' : '离线示例数据 · 实际以银行牌价为准' }}</span></div></div>
+                <span class="rate-line">1 {{ (CURR.find(c => c[0] === curr.from) || [])[1] }} ≈ {{ currRateLine }} {{ (CURR.find(c => c[0] === curr.to) || [])[1] }}   {{ currSrc === 'live' ? '实时汇率（open.er-api.com）' : '离线示例数据   实际以银行牌价为准' }}</span></div></div>
           </template>
 
           <!-- 7 时差查询 -->
           <template v-if="activeTool === 'timediff'">
-            <div class="tb-block"><div class="lb"><SIcon name="clock" :size="12" color="#338FF2" /> 城市选择 · 本地时间实时计算（含夏令时）</div>
+            <div class="tb-block"><div class="lb"><SIcon name="clock" :size="12" color="#338FF2" /> 城市选择   本地时间实时计算（含夏令时）</div>
               <div class="tb-row">
                 <select class="tb-select" v-model="tz.from"><option v-for="c in TZ_CITIES" :key="c.city" :value="c.city">{{ c.city }}</option></select>
                 <button class="tb-swap" @click="tbSwapTz" title="交换"><SIcon name="right" :size="15" /></button>
@@ -138,31 +138,31 @@
               </div>
               <div class="tb-grid2" style="margin-top:14px">
                 <div class="tb-result">{{ tz.from }}（{{ tzFromInfo.label }}）<br><span class="big">{{ tzFromInfo.time }}</span><br>
-                  <span class="tz-note">{{ tzFromInfo.utcLabel }} · 与北京{{ tzFromInfo.diffBjk === 0 ? '无时差' : tzFromInfo.diffBjk > 0 ? '早 ' + tzFromInfo.diffBjk + ' 小时' : '晚 ' + (-tzFromInfo.diffBjk) + ' 小时' }}</span></div>
+                  <span class="tz-note">{{ tzFromInfo.utcLabel }}   与北京{{ tzFromInfo.diffBjk === 0 ? '无时差' : tzFromInfo.diffBjk > 0 ? '早 ' + tzFromInfo.diffBjk + ' 小时' : '晚 ' + (-tzFromInfo.diffBjk) + ' 小时' }}</span></div>
                 <div class="tb-result">{{ tz.to }}（{{ tzToInfo.label }}）<br><span class="big">{{ tzToInfo.time }}</span><br>
-                  <span class="tz-note">{{ tzToInfo.utcLabel }} · 与北京{{ tzToInfo.diffBjk === 0 ? '无时差' : tzToInfo.diffBjk > 0 ? '早 ' + tzToInfo.diffBjk + ' 小时' : '晚 ' + (-tzToInfo.diffBjk) + ' 小时' }}</span></div>
+                  <span class="tz-note">{{ tzToInfo.utcLabel }}   与北京{{ tzToInfo.diffBjk === 0 ? '无时差' : tzToInfo.diffBjk > 0 ? '早 ' + tzToInfo.diffBjk + ' 小时' : '晚 ' + (-tzToInfo.diffBjk) + ' 小时' }}</span></div>
               </div>
-              <div class="tb-result" style="margin-top:12px;font-size:12px;color:#70869B">
-                {{ tz.to }} 比 {{ tz.from }} {{ tzDiff === 0 ? '时间相同' : tzDiff > 0 ? '早 ' + tzDiff + ' 小时' : '晚 ' + (-tzDiff) + ' 小时' }} · 安排叫早与集合时间时请注意换算</div></div>
+              <div class="tb-result" style="margin-top:12px;font-size:12px;color:#42586e">
+                {{ tz.to }} 比 {{ tz.from }} {{ tzDiff === 0 ? '时间相同' : tzDiff > 0 ? '早 ' + tzDiff + ' 小时' : '晚 ' + (-tzDiff) + ' 小时' }}   安排叫早与集合时间时请注意换算</div></div>
           </template>
 
           <!-- 8 天气查询 -->
           <template v-if="activeTool === 'weather'">
-            <div class="tb-block"><div class="lb"><SIcon name="cloud" :size="12" color="#0EA5E9" /> 选择目的地 · 实时天气（Open-Meteo）</div>
+            <div class="tb-block"><div class="lb"><SIcon name="cloud" :size="12" color="#0EA5E9" /> 选择目的地   实时天气（Open-Meteo）</div>
               <div class="tb-row">
                 <span v-for="c in Object.keys(WTHR_CITIES)" :key="c" class="tb-tag" :class="{ sel: wthr.city === c }" @click="wthr.city = c">{{ c }}</span>
               </div></div>
-            <div class="tb-block"><div class="lb"><SIcon name="pin" :size="12" color="#0EA5E9" /> {{ wthr.city }} · 今日天气<template v-if="wthr.loading">（加载中…）</template></div>
+            <div class="tb-block"><div class="lb"><SIcon name="pin" :size="12" color="#0EA5E9" /> {{ wthr.city }}   今日天气<template v-if="wthr.loading">（加载中…）</template></div>
               <div class="tb-result"><div class="wx-row"><SIcon :name="wthrData.ic" :size="40" color="#0EA5E9" />
-                <div><span class="big">{{ wthrData.temp }}</span><br>{{ wthrData.t }} · {{ wthrData.wind }} · 湿度 {{ wthrData.hum }}</div></div></div>
+                <div><span class="big">{{ wthrData.temp }}</span><br>{{ wthrData.t }}   {{ wthrData.wind }}   湿度 {{ wthrData.hum }}</div></div></div>
               <div class="tb-result" style="margin-top:12px;font-size:12.5px"><SIcon name="warn" :size="12" color="#F59E0B" /> <b>带团提示：</b>{{ wthrData.adv }}<br>
-                <span class="rate-line">{{ wthr.src === 'live' ? '实时天气 · 数据来源 Open-Meteo' : '离线示例数据 · 仅供参考' }}</span></div></div>
+                <span class="rate-line">{{ wthr.src === 'live' ? '实时天气   数据来源 Open-Meteo' : '离线示例数据   仅供参考' }}</span></div></div>
           </template>
 
           <!-- 9 紧急电话 -->
           <template v-if="activeTool === 'emergency'">
             <div class="tb-block"><div class="lb"><SIcon name="phone" :size="12" color="#DC2626" /> 搜索应急号码</div>
-              <input type="text" v-model="emgQ" placeholder="输入国家 / 类型 / 号码" />
+              <input type="text" v-model="emgQ" placeholder="输入国家、类型、号码" />
               <div class="tb-list" style="margin-top:12px">
                 <template v-if="emgFiltered.length">
                   <div v-for="e in emgFiltered" :key="e[0]" class="tb-item">
@@ -181,7 +181,7 @@
               <div class="tb-row">
                 <span v-for="t in SPOT_THEMES" :key="t" class="tb-tag" :class="{ sel: spots.theme === t }" @click="spots.theme = t">{{ t }}</span>
               </div></div>
-            <div class="tb-block"><div class="lb"><SIcon name="star" :size="12" color="#EC4899" /> 「{{ spots.theme }}」主题 · {{ spotsFiltered.length }} 个推荐</div>
+            <div class="tb-block"><div class="lb"><SIcon name="star" :size="12" color="#EC4899" /> 「{{ spots.theme }}」主题   {{ spotsFiltered.length }} 个推荐</div>
               <div class="tb-list">
                 <template v-if="spotsFiltered.length">
                   <div v-for="s in spotsFiltered" :key="s.n" class="tb-item">
@@ -195,7 +195,7 @@
 
           <!-- 11 拍照翻译 -->
           <template v-if="activeTool === 'phototrans'">
-            <div class="tb-block"><div class="lb"><SIcon name="camera" :size="12" color="#14B8A6" /> 上传路牌 / 菜单图片</div>
+            <div class="tb-block"><div class="lb"><SIcon name="camera" :size="12" color="#14B8A6" /> 上传路牌、菜单图片</div>
               <div class="photo-drop">
                 <SIcon name="camera" :size="28" color="#14B8A6" />
                 <div class="pd-txt">点击此处上传或拍摄图片</div>
@@ -276,7 +276,7 @@ function tbGenItinerary() {
   const arr = per[itn.theme]
   let txt = ''
   for (let d = 1; d <= itn.days; d++) {
-    txt += `第${d}天\n  上午 · ${arr[d % arr.length]}（约2.5小时）\n  中午 · 当地特色餐厅午餐，安排休息\n  下午 · ${arr[(d + 1) % arr.length]}（约2.5小时）\n  傍晚 · 自由活动 / 集合清点\n\n`
+    txt += `第${d}天\n  上午   ${arr[d % arr.length]}（约2.5小时）\n  中午   当地特色餐厅午餐，安排休息\n  下午   ${arr[(d + 1) % arr.length]}（约2.5小时）\n  傍晚   自由活动、集合清点\n\n`
   }
   txt += '备注：全程预留机动时间，可根据游客体力与兴趣灵活调整。'
   itn.out = txt
@@ -586,7 +586,7 @@ function tbCopy(txt: string) {
 
 .tb-page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: $color-bg; }
 .ph { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px 10px; flex-shrink: 0; }
-.ph-title { font-family: $font-serif; font-size: 19px; font-weight: 700; color: $color-primary; }
+.ph-title { font-family: $font-serif; font-size: 19px; font-weight: 700; color: $color-text-link; }
 .tb-count { font-size: 11.5px; padding: 5px 13px; border-radius: 20px; color: #256CA7;
   background: rgba(51,143,242,.12); border: 1px solid rgba(51,143,242,.3); }
 .tb-body { flex: 1; min-height: 0; overflow-y: auto; }
@@ -612,25 +612,25 @@ function tbCopy(txt: string) {
   &:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(24,58,99,.1); border-color: rgba(51,143,242,.4); }
   .ic { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
   .t { font-size: 14px; font-weight: 500; color: $color-text; }
-  .d { font-size: 11px; margin-top: 2px; color: #B5B0A6; } }
+  .d { font-size: 11px; margin-top: 2px; color: $color-text-secondary; } }
 
 /* 工具详情面板 */
 .tb-back { display: inline-flex; align-items: center; gap: 5px; border: none; cursor: pointer;
-  background: transparent; color: $color-primary; font-size: 13px; padding: 6px 10px; border-radius: 8px;
+  background: transparent; color: $color-text-link; font-size: 13px; padding: 6px 10px; border-radius: 8px;
   transition: background .12s; margin-bottom: 12px; font-family: $font-sans;
   &:hover { background: rgba(24,58,99,.06); } }
 .tool-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 16px;
   margin-bottom: 16px; background: rgba(255,255,255,.88); border: 1px solid $color-border;
   .ic { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .th { flex: 1; min-width: 0;
-    .t { font-size: 17px; font-weight: 700; color: $color-primary; font-family: $font-serif; }
+    .t { font-size: 17px; font-weight: 700; color: $color-text-link; font-family: $font-serif; }
     .d { font-size: 12px; color: $color-text-secondary; margin-top: 3px; } } }
-.ai-badge { font-size: 11px; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
+.ai-badge { color: $color-text-link; font-size: 11px; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
 .tb-demo-badge { font-size: 10.5px; padding: 3px 10px; border-radius: 20px; white-space: nowrap;
-  color: #8A8A8A; background: #EAF3FC; border: 1px solid #DCEAF7;
+  color: $color-text-secondary; background: #EAF3FC; border: 1px solid #DCEAF7;
   &.live { color: #1F7A4D; background: rgba(31,122,77,.08); border-color: rgba(31,122,77,.25); } }
 .tb-card-badge { position: absolute; top: 10px; right: 10px; font-size: 10px; padding: 2px 8px; }
-.tz-note { font-size: 11px; color: #B5B0A6; }
+.tz-note { font-size: 11px; color: $color-text-secondary; }
 
 /* 通用块 */
 .tb-block { background: rgba(255,255,255,.88); border: 1px solid $color-border; border-radius: 16px;
@@ -654,20 +654,20 @@ function tbCopy(txt: string) {
   border: 1px solid rgba(24,58,99,.08); font-size: 13px; line-height: 1.7; color: $color-text;
   white-space: pre-wrap; word-break: break-word;
   .big { font-size: 26px; font-weight: 700; color: #256CA7; font-family: 'Liberation Mono', monospace; }
-  .rate-line { font-size: 11px; color: #B5B0A6; } }
+  .rate-line { font-size: 11px; color: $color-text-secondary; } }
 .tb-list { display: flex; flex-direction: column; gap: 8px; }
 .tb-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px;
   background: rgba(255,255,255,.75); border: 1px solid $color-border; transition: all .15s;
   .ic2 { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center;
     justify-content: center; flex-shrink: 0; }
   .it-body { flex: 1; min-width: 0;
-    .t { font-size: 13px; font-weight: 600; color: $color-primary;
+    .t { font-size: 13px; font-weight: 600; color: $color-text-link;
       .sp-cat { font-size: 10px; color: #256CA7; font-weight: 500; } }
     .d { font-size: 11px; color: $color-text-secondary; margin-top: 2px; line-height: 1.5;
-      &.tip { color: #B5B0A6; } } }
-  .em-num { font-family: 'Liberation Mono', monospace; font-weight: 700; color: #DC2626; font-size: 15px;
+      &.tip { color: $color-text-secondary; } } }
+  .em-num { font-family: 'Liberation Mono', monospace; font-weight: 700; color: #c42222; font-size: 15px;
     align-self: center; } }
-.tb-none { color: #B5B0A6; font-size: 12px; padding: 12px; }
+.tb-none { color: $color-text-secondary; font-size: 12px; padding: 12px; }
 .tb-tag { display: inline-block; padding: 5px 13px; border-radius: 20px; font-size: 12px;
   background: $color-secondary-bg; color: $color-text-secondary; cursor: pointer; transition: all .15s;
   border: 1px solid transparent; font-family: $font-sans;
@@ -683,11 +683,11 @@ function tbCopy(txt: string) {
   .cb { width: 20px; height: 20px; border-radius: 6px; border: 2px solid $color-border;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .15s; }
   .txt { font-size: 13px; color: $color-text;
-    .sub { color: #B5B0A6; font-size: 11px; } }
+    .sub { color: $color-text-secondary; font-size: 11px; } }
   &.on { .cb { background: #8B5CF6; border-color: #8B5CF6; }
     .txt { color: #6D28D9; font-weight: 500; } } }
 .tb-swap { width: 36px; height: 36px; border-radius: 10px; border: 1px solid $color-border; background: #fff;
-  cursor: pointer; display: flex; align-items: center; justify-content: center; color: $color-primary;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; color: $color-text-link;
   transition: all .15s; flex-shrink: 0;
   &:hover { background: $color-primary; color: #fff; } }
 .wx-row { display: flex; align-items: center; gap: 14px; }
