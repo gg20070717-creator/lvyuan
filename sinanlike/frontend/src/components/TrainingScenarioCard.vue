@@ -5,7 +5,7 @@
       <div class="scenario-meta"><span>{{ integrated ? (capstone ? '全流程任务' : '分项任务') : scenario.category }}</span><span v-if="completed" class="complete-label"><SIcon name="check" :size="12" />已完成</span><span v-else>{{ scenario.stage_count }} 个阶段</span></div>
       <h3>{{ scenario.title }}</h3>
       <p :title="display(scenario.task || scenario.location)">{{ display(scenario.task || scenario.location) }}</p>
-      <ol v-if="integrated && scenario.stage_titles?.length" class="scenario-stages"><li v-for="(title, index) in scenario.stage_titles.slice(0, 3)" :key="index"><i>{{ index + 1 }}</i>{{ display(title) }}</li><li v-if="scenario.stage_titles.length > 3" class="stages-more">等 {{ scenario.stage_count }} 个阶段</li></ol>
+      <ol v-if="integrated && scenario.stage_titles?.length" class="scenario-stages"><li v-for="(title, index) in scenario.stage_titles.slice(0, 3)" :key="index"><i>{{ index + 1 }}</i>{{ cleanNumberedTitle(title) }}</li><li v-if="scenario.stage_titles.length > 3" class="stages-more">还有 {{ scenario.stage_titles.length - 3 }} 个阶段</li></ol>
       <div v-else class="scenario-location"><SIcon name="pin" :size="12" />{{ display(scenario.location) }}</div>
     </div>
     <div class="scenario-bottom">
@@ -17,7 +17,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { SandboxTemplate } from '@/api/sandbox'
-import { cleanDisplayText as display } from '@/utils/displayText'
+import { cleanDisplayText as display, cleanNumberedTitle } from '@/utils/displayText'
 import SIcon from './SIcon.vue'
 const props = defineProps<{ scenario: SandboxTemplate; integrated?: boolean; capstone?: boolean; locked?: boolean; completed?: boolean; icon: string }>()
 defineEmits<{ select: [scenario: SandboxTemplate] }>()

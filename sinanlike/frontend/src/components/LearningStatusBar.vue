@@ -17,6 +17,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAccountsStore } from '@/stores/accounts'
 import { useOnboardingStore } from '@/stores/onboarding'
 import { useCooperationStore } from '@/stores/cooperation'
+import { cleanNumberedTitle } from '@/utils/displayText'
 import SIcon from './SIcon.vue'
 const route = useRoute(), router = useRouter()
 defineProps<{ compact?: boolean }>()
@@ -41,7 +42,7 @@ const status = computed(() => {
   if (route.path === '/app/profile') return '查看自我画像与学情'
   if (route.path === '/app/knowledge') return '浏览定制学习资源'
   if (route.path === '/app/knowledge-tree') return '知识学习'
-  if (route.path === '/app/training' && co.practice) return co.practice.title
+  if (route.path === '/app/training' && co.practice) return cleanNumberedTitle(co.practice.title)
   if (route.path === '/app/training') return stageIndex.value === 4 ? '选择综合实战场景' : route.query.focus === 'emergency' ? '选择应急处理场景' : '选择沟通训练场景'
   if (route.query.activity === 'quiz' && co.teaching?.stage !== 'practicing') return '准备抽题测验'
   const labels:Record<string,string> = { goal_setting:'确定学习目标',teaching:'知识学习中',checking:'确认理解',practicing:'答题测验中',feedback:'分析错因与巩固',closing:'学习复盘',idle:'准备开始学习' }

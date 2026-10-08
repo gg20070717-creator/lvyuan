@@ -1,19 +1,16 @@
 <template>
-  <div class="tg-page">
+  <div class="tg-page" :class="{ 'gallery-view': scene === null }">
     <!-- ══════════ 沙盒模拟 sandbox ══════════ -->
-      <header class="ph">
+      <header v-if="scene !== null" class="ph">
         <div class="ph-left">
           <button v-if="scene !== null" class="ghost-btn" :disabled="sbSending || sbEnding || co.running" @click="exitScene">
             <SIcon name="back" :size="12" /> 返回
           </button>
-          <h2 class="ph-title">{{ scene === null ? galleryTitle : modeTitle }}</h2>
+          <h2 class="ph-title">{{ modeTitle }}</h2>
         </div>
         <div class="ph-right">
-          <span v-if="scene === null && sandboxStats.n" class="pill">
-            <SIcon name="trophy" :size="11" /> 平均 {{ sandboxStats.avg }} 分
-          </span>
-          <span v-else-if="scene !== null && stage" class="pill gold-pill">
-            <SIcon name="target" :size="11" /> {{ stage.title }}
+          <span v-if="stage" class="pill gold-pill">
+            <SIcon name="target" :size="11" /> {{ stageTitle }}
           </span>
           <button v-if="scene !== null" class="ghost-btn" :disabled="sbSending || sbEnding || co.running" @click="resetScene">↺ 重开</button>
         </div>
@@ -22,11 +19,10 @@
       <div class="tg-body">
         <!-- ══ 场景列表视图 ══ -->
         <Transition name="content-switch" mode="out-in">
-        <div v-if="scene === null" :key="galleryKey" class="tg-list" :class="`gallery-${TRAIN_TABS[tab].k}`">
+        <div v-if="scene === null" :key="galleryKey" class="tg-list" :class="`gallery-${TRAIN_TABS[tab].k}`" role="region" :aria-label="galleryTitle">
           <div class="gallery-intro" :class="{ integrated: tab === 0 }">
-            <div class="gallery-intro-copy"><span class="gallery-eyebrow">{{ tab === 0 ? '完整任务，逐步进阶' : '聚焦一项能力' }}</span><h3>{{ galleryIntro.heading }}</h3><p>{{ galleryIntro.description }}</p></div>
-            <ol v-if="tab === 0" class="gallery-process"><li v-for="(label, index) in galleryIntro.steps" :key="label"><span>{{ String(index + 1).padStart(2, '0') }}</span><b>{{ label }}</b></li></ol>
-            <span v-else class="gallery-intro-symbol"><SIcon :name="TRAIN_TABS[tab].i" :size="35" /></span>
+            <LearningSceneVisual :kind="galleryVisual" class="gallery-visual" />
+            <ol class="gallery-process" aria-label="训练重点"><li v-for="step in gallerySteps" :key="step.label"><span><SIcon :name="step.icon" :size="20" /></span><b>{{ step.label }}</b></li></ol>
           </div>
           <!-- 成绩概览条 -->
           <div v-if="sandboxStats.n" class="tf-overview">
@@ -42,11 +38,10 @@
           <div v-if="templatesLoading" class="gallery-empty"><span class="sb-spinner"></span>正在加载场景</div>
           <div v-else-if="!currentList.length" class="gallery-empty">{{ templatesError ? '场景暂时未加载' : '暂无可用场景' }}<button v-if="templatesError" class="ghost-btn" @click="loadTemplates">重试</button></div>
           <template v-else-if="tab === 0">
-            <div v-if="phaseLessons.length" class="phase-lessons"><div class="gallery-section-label"><h4>分项练习</h4><span>逐项熟悉本阶段任务</span></div><div class="scenario-grid integrated-grid"><TrainingScenarioCard v-for="s in phaseLessons" :key="s.template_id" :scenario="s" integrated :icon="scenarioIcon(s)" :locked="isLocked(s)" :completed="completedTplIds.has(s.template_id)" @select="guardScene" /></div></div>
-            <div v-if="phaseCapstones.length" class="phase-capstones"><div class="gallery-section-label"><h4>全流程实战</h4><span>把各项能力串成完整任务</span></div><TrainingScenarioCard v-for="s in phaseCapstones" :key="s.template_id" :scenario="s" integrated capstone :icon="scenarioIcon(s)" :locked="isLocked(s)" :completed="completedTplIds.has(s.template_id)" @select="guardScene" /></div>
+            <div v-if="phaseLessons.length" class="phase-lessons"><div class="gallery-section-label"><h4>分项练习</h4></div><div class="scenario-grid integrated-grid"><TrainingScenarioCard v-for="s in phaseLessons" :key="s.template_id" :scenario="s" integrated :icon="scenarioIcon(s)" :locked="isLocked(s)" :completed="completedTplIds.has(s.template_id)" @select="guardScene" /></div></div>
+            <div v-if="phaseCapstones.length" class="phase-capstones"><div class="gallery-section-label"><h4>全流程实战</h4></div><TrainingScenarioCard v-for="s in phaseCapstones" :key="s.template_id" :scenario="s" integrated capstone :icon="scenarioIcon(s)" :locked="isLocked(s)" :completed="completedTplIds.has(s.template_id)" @select="guardScene" /></div>
           </template>
           <div v-else class="scenario-grid" :class="{ 'emergency-grid': tab === 2 }"><TrainingScenarioCard v-for="s in currentList" :key="s.template_id" :scenario="s" :icon="scenarioIcon(s)" :locked="isLocked(s)" :completed="completedTplIds.has(s.template_id)" @select="guardScene" /></div>
-          <p v-if="!templatesLoading && currentList.length" class="gallery-helper"><SIcon name="sparkle" :size="13" />{{ accounts.isSignedIn ? '自由对话，完成练习后查看表现反馈' : '可先浏览场景，登录并完善画像后开始训练' }}</p>
         </div>
 
         <!-- ══ 对话式模拟视图 ══ -->
@@ -86,7 +81,7 @@
             </div>
             <div class="sb-stage">
               <div class="sb-stage-top">
-                <span class="t"><SIcon name="map" :size="11" color="#338FF2" /> 带团进度   {{ sbSession.stage.title }}</span>
+                <span class="t"><SIcon name="map" :size="11" color="#338FF2" /> 带团进度   {{ stageTitle }}</span>
                 <span class="pct">第 {{ sbSession.stage.index + 1 }} 阶段，共 {{ sbSession.stage.total }} 阶段</span>
               </div>
               <div class="track"><div class="fill" :style="{ width: Math.round((sbSession.stage.index + 1) / sbSession.stage.total * 100) + '%' }"></div></div>
@@ -152,7 +147,7 @@
 
           <!-- 知识提示面板 -->
           <div v-if="kbOpen" class="tr-panel sb-kb">
-            <div class="hd"><SIcon name="book" :size="13" color="#338FF2" /><span class="t">知识提示   {{ sbSession.stage.title }}</span><button class="x" @click="kbOpen = false"><SIcon name="x" :size="11" /></button></div>
+            <div class="hd"><SIcon name="book" :size="13" color="#338FF2" /><span class="t">知识提示   {{ stageTitle }}</span><button class="x" @click="kbOpen = false"><SIcon name="x" :size="11" /></button></div>
             <div class="sb-kb-hint">{{ sbSession.stage.guide_hint }}</div>
             <div v-if="kbHints.length" class="kb-facts">
               <div v-for="f in kbHints" :key="f.title" class="kb-fact"><div class="k">{{ f.title }}</div><div class="v">{{ display(f.content) }}</div></div>
@@ -284,7 +279,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, onActivated, onDeactivated, ref, watch } from 'vue'
-import { cleanDisplayText as display } from '@/utils/displayText'
+import { cleanDisplayText as display, cleanNumberedTitle } from '@/utils/displayText'
 import { useRouter, useRoute, onBeforeRouteUpdate } from 'vue-router'
 import { classifyError } from '@/api/client'
 import { ElMessage } from 'element-plus'
@@ -293,6 +288,7 @@ import { useAccountsStore } from '@/stores/accounts'
 import { useOnboardingStore } from '@/stores/onboarding'
 import SIcon from '@/components/SIcon.vue'
 import TrainingScenarioCard from '@/components/TrainingScenarioCard.vue'
+import LearningSceneVisual from '@/components/LearningSceneVisual.vue'
 import { useCooperationStore } from '@/stores/cooperation'
 import { integratedPhase, inIntegratedPhase } from '@/utils/navigation'
 import RealtimeVoiceBar from '@/components/RealtimeVoiceBar.vue'
@@ -363,15 +359,16 @@ const galleryTitle = computed(() => tab.value === 0 ? ({ pre:'行前定制', mid
 const galleryKey = computed(() => `${TRAIN_TABS[tab.value].k}-${tab.value === 0 ? integratedPhase(route.query.phase) : ''}`)
 const phaseLessons = computed(() => currentList.value.filter(item => !item.template_id.startsWith('t_ff_')))
 const phaseCapstones = computed(() => currentList.value.filter(item => item.template_id.startsWith('t_ff_')))
-const galleryIntro = computed(() => {
+const galleryVisual = computed(() => tab.value === 0 ? integratedPhase(route.query.phase) : tab.value === 2 ? 'emergency' : tab.value === 3 ? 'narrate' : 'communication')
+const gallerySteps = computed(() => {
   if (tab.value === 0) return {
-    pre: { heading: '把需求变成一段好行程', description: '从需求访谈到方案确认，练习行前定制的完整过程。', steps: ['了解需求', '规划行程', '沟通确认'] },
-    mid: { heading: '让每一程接待从容有序', description: '在真实带团情境中，串联接待、讲解与跨文化沟通。', steps: ['接待服务', '文化沟通', '现场应变'] },
-    post: { heading: '让一次旅程成为下一次进步', description: '通过回访与复盘，整理服务表现和改进方向。', steps: ['游客回访', '服务复盘', '改进总结'] },
+    pre: [{ icon:'user', label:'了解需求' }, { icon:'map', label:'规划行程' }, { icon:'bookcheck', label:'沟通确认' }],
+    mid: [{ icon:'pin', label:'接待服务' }, { icon:'globe', label:'文化沟通' }, { icon:'shield', label:'现场应变' }],
+    post: [{ icon:'msg', label:'游客回访' }, { icon:'notebook', label:'服务复盘' }, { icon:'trend', label:'改进总结' }],
   }[integratedPhase(route.query.phase)]
-  if (tab.value === 2) return { heading: '遇到变化，也能稳妥应对', description: '从识别问题、安抚情绪到提出方案，练习关键时刻的应变能力。', steps: [] }
-  if (tab.value === 3) return { heading: '让文化讲解自然发生', description: '围绕现场情境与游客追问，练习清晰、有趣的即兴讲解。', steps: [] }
-  return { heading: '把每一次沟通练到从容', description: '在电话、微信与接待情境中，练习倾听、表达和需求确认。', steps: [] }
+  if (tab.value === 2) return [{ icon:'shield', label:'识别风险' }, { icon:'user', label:'稳定现场' }, { icon:'bookcheck', label:'安排处置' }]
+  if (tab.value === 3) return [{ icon:'book', label:'组织内容' }, { icon:'mic', label:'现场讲解' }, { icon:'msg', label:'回应追问' }]
+  return [{ icon:'phone', label:'倾听需求' }, { icon:'bookcheck', label:'确认信息' }, { icon:'msg', label:'沟通方案' }]
 })
 function scenarioIcon(item: SandboxTemplate) {
   if (tab.value === 0) return { pre:'notebook', mid:'globe', post:'trend' }[integratedPhase(route.query.phase)]
@@ -403,6 +400,7 @@ const modeTitle = computed(() => {
   return t ? (TRAIN_TABS[tab.value].l + '：' + t.title) : '实战训练'
 })
 const stage = computed(() => sbSession.value?.stage ?? null)
+const stageTitle = computed(() => cleanNumberedTitle(stage.value?.title || ''))
 const messages = computed(() => sbSession.value?.messages ?? [])
 
 // 沙盒 v3：游客多维属性（职业[含性别前缀]/健康/消费/说话风格，两两成行；字段缺失自动隐藏）
@@ -855,19 +853,19 @@ onUnmounted(() => {
 
 /* ══ 沙盒   body / 列表 ══ */
 .tg-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 28px 35px; display: flex; flex-direction: column; }
+.gallery-view .tg-body { padding-top:24px; }
 .tg-list { max-width: 1064px; margin: 0 auto; width: 100%; }
-.gallery-intro { display:flex; align-items:center; justify-content:space-between; gap:28px; margin-bottom:26px; padding:4px 4px 23px; border-bottom:1px solid #dfeaf4; h3 { font:600 23px/1.6 $font-serif; color:#294f70; margin:10px 0 7px; } p { font-size:13px; color:$color-text-secondary; line-height:1.8; margin:0; } &.integrated { padding:27px 30px; background:linear-gradient(110deg,#edf6ff,#f9fcff); border:1px solid #dce9f5; border-radius:18px 4px 18px 4px; } }
-.gallery-eyebrow { font-size:11px; letter-spacing:1px; color:$color-text-link; }
-.gallery-intro-symbol { display:grid; place-items:center; width:72px; height:72px; background:#ecf5fe; border:1px solid #e0edf8; color:$color-text-secondary; border-radius:18px 5px 18px 5px; flex-shrink:0; margin-right:7px; }
-.gallery-process { display:flex; list-style:none; flex-shrink:0; gap:22px; margin:0; padding:0; li { position:relative; display:flex; flex-direction:column; gap:10px; align-items:center; &:not(:last-child)::after { content:''; position:absolute; top:14px; left:calc(50% + 18px); width:calc(100% - 14px); height:1px; background:#d5e6f5; } } span { display:grid; place-items:center; width:29px; height:29px; border-radius:50%; background:#fff; border:1px solid #d9e8f5; color:$color-text-secondary; font-size:10px; } b { font-size:11px; color:$color-text-secondary; font-weight:400; white-space:nowrap; } }
+.gallery-intro { display:flex; align-items:center; justify-content:space-around; gap:30px; margin-bottom:24px; padding:12px 30px 20px; border-bottom:1px solid #dfeaf4; &.integrated { padding:15px 30px; background:linear-gradient(110deg,#edf6ff,#f9fcff); border:1px solid #dce9f5; border-radius:18px 4px 18px 4px; } }
+.gallery-visual { width:300px; }
+.gallery-process { display:flex; list-style:none; flex:1; max-width:470px; margin:0; padding:0; li { position:relative; flex:1; display:flex; flex-direction:column; gap:12px; align-items:center; &:not(:last-child)::after { content:''; position:absolute; top:21px; left:calc(50% + 26px); width:calc(100% - 52px); height:1px; background:#cbdfef; } } span { display:grid; place-items:center; width:43px; height:43px; border-radius:12px 4px 12px 4px; background:#fff; border:1px solid #d2e3f1; color:#3b729e; } b { font-size:12px; color:$color-text-secondary; font-weight:400; white-space:nowrap; } }
 .scenario-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
 .integrated-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
-.gallery-section-label { display:flex; align-items:baseline; gap:14px; margin:0 0 13px; h4 { font-size:14px; color:#426782; font-weight:500; margin:0; } >span { font-size:11px; color:$color-text-secondary; } }
+.gallery-section-label { margin:0 0 13px; h4 { font-size:14px; color:#426782; font-weight:500; margin:0; } }
 .phase-capstones { display:flex; flex-direction:column; gap:14px; margin-top:26px; .gallery-section-label { margin-bottom:0; } }
-.gallery-helper { display:flex; align-items:center; gap:7px; margin:22px 0 0; font-size:11px; color:$color-text-secondary; line-height:1.7; }
 .emergency-grid { grid-template-columns:1fr; :deep(.scenario-card) { grid-template-columns:46px minmax(0,1fr) auto; align-items:center; gap:22px; } :deep(.scenario-bottom) { grid-column:3; flex-direction:column; border:0; align-items:flex-end; padding:0; } :deep(.scenario-content > p) { -webkit-line-clamp:1; } }
-@media(max-width:900px) { .integrated-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .gallery-intro.integrated { align-items:flex-start; flex-direction:column; gap:22px; } .gallery-process { gap:32px; } }
-@media(max-width:650px) { .ph { padding:22px 16px 18px; } .ph-title { font-size:21px; } .tg-body { padding:0 16px 28px; } .scenario-grid,.integrated-grid { grid-template-columns:1fr; } .gallery-intro { gap:18px; h3 { font-size:21px; } p { font-size:12px; } &.integrated { padding:23px; } } .gallery-intro-symbol { width:51px; height:51px; margin:0; } .gallery-process { gap:27px; } .emergency-grid { :deep(.scenario-card) { grid-template-columns:46px minmax(0,1fr); } :deep(.scenario-bottom) { grid-column:1/-1; flex-direction:row; align-items:center; border-top:1px solid #edf2f7; padding-top:17px; } } .gallery-section-label { flex-wrap:wrap; gap:6px 12px; } }
+@media(max-width:900px) { .integrated-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .gallery-visual { width:260px; } .gallery-intro { padding-right:20px; padding-left:20px; gap:18px; } }
+@media(max-width:760px) { .gallery-intro { flex-direction:column; gap:9px; padding:15px 20px 22px; &.integrated { padding:15px 20px 22px; } } .gallery-visual { width:250px; } .gallery-process { flex:none; width:100%; max-width:380px; } }
+@media(max-width:650px) { .ph { padding:22px 16px 18px; } .ph-title { font-size:21px; } .tg-body { padding:0 16px 28px; } .gallery-view .tg-body { padding-top:20px; } .scenario-grid,.integrated-grid { grid-template-columns:1fr; } .gallery-process { span { width:36px; height:36px; } b { font-size:11px; } li { gap:9px; &:not(:last-child)::after { top:18px; left:calc(50% + 23px); width:calc(100% - 46px); } } } .emergency-grid { :deep(.scenario-card) { grid-template-columns:46px minmax(0,1fr); } :deep(.scenario-bottom) { grid-column:1/-1; flex-direction:row; align-items:center; border-top:1px solid #edf2f7; padding-top:17px; } } }
 .gallery-toolbar { display:flex; align-items:center; gap:16px; margin:22px 0 16px; color:#426482; font-size:13px; small { margin-left:auto; font-size:11px; color:$color-text-secondary; } }
 .gallery-empty { display:flex; align-items:center; justify-content:center; gap:12px; padding:70px 20px; color:$color-text-secondary; font-size:13px; .sb-spinner { width:17px; height:17px; } }
 .scene-card:focus-visible { outline:2px solid #338ff2; outline-offset:3px; }

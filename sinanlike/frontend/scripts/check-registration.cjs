@@ -51,6 +51,10 @@ const mocks = {
   '@/assets/lvyuan-logo.jpg':{default:'logo.jpg'}, '@/components/GuofengLandscape.vue':{default:{render:()=>null}},
   '@/components/SIcon.vue':{default:{render:()=>null}}, '@/components/OnboardingWizard.vue':{default:Wizard},
 }
+const displayExports = {}
+const displayCode = ts.transpileModule(fs.readFileSync(path.join(frontend,'src/utils/displayText.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
+new Function('exports',displayCode)(displayExports)
+mocks['@/utils/displayText'] = displayExports
 function detach(node) { if(node.parent) { node.parent.children.splice(node.parent.children.indexOf(node),1);node.parent=null } }
 const renderer = vue.createRenderer({
   createElement:tag=>new HostNode(tag),createText:text=>new HostNode('#text',text),createComment:text=>new HostNode('#comment',text),

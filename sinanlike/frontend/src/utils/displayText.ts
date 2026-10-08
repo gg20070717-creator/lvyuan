@@ -1,5 +1,14 @@
 // 只处理可见文案，技术标识、文件地址和富文本结构保留原值。
 export function cleanDisplayText(text: string): string { return text.replace(/\u00b7/g, ' ').replace(/\s*[\/|]+\s*/g, '、') }
+// 已有序号徽标或独立进度时，标题只保留内容；正文、数量与技术标识不经过此函数。
+export function cleanNumberedTitle(text: string): string {
+  const original = cleanDisplayText(text).trim()
+  const title = original
+    .replace(/[①-⑳㉑-㉟㊱-㊿❶-❿]/gu, '')
+    .replace(/^\s*(?:第\s*[\d零〇一二三四五六七八九十百]+\s*(?:阶段|部分|步|节|章)\s*[、:：.．-]?\s*|[（(]\s*[\d零〇一二三四五六七八九十百]+\s*[）)]\s*[、:：.．-]?\s*|\d+(?:[.．]\d+)+\s+|(?:\d+(?:[.．]\d+)*|[零〇一二三四五六七八九十百]+)[、.．)）:：](?!\d)\s*)/u, '')
+    .replace(/\s+/g, ' ').trim()
+  return title || original
+}
 export function cleanDisplayHtml(html: string): string {
   const template = document.createElement('template')
   template.innerHTML = html

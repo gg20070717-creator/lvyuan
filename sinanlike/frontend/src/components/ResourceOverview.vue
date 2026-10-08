@@ -2,16 +2,16 @@
   <section class="resource-overview">
     <div class="ro-top"><span><SIcon name="map" :size="16" />图解导览</span><small>{{ outline.length }} 个内容模块   按原文顺序整理</small></div>
     <div v-if="outline.length" class="ro-map" :class="{ timeline:type === 'plan' || type === 'practice_guide' }">
-      <button v-for="(section,index) in outline" :key="index" :class="{ active:selected === index }" @click="selected = index"><span class="ro-number">{{ String(index+1).padStart(2,'0') }}</span><b>{{ display(section.title) }}</b><p>{{ display(section.points[0] || excerpt(section.content)) }}</p><span class="ro-connect" v-if="index < outline.length - 1"></span></button>
+      <button v-for="(section,index) in outline" :key="index" :class="{ active:selected === index }" @click="selected = index"><span class="ro-number">{{ String(index+1).padStart(2,'0') }}</span><b>{{ cleanNumberedTitle(section.title) }}</b><p>{{ display(section.points[0] || excerpt(section.content)) }}</p><span class="ro-connect" v-if="index < outline.length - 1"></span></button>
     </div>
-    <div v-if="outline[selected]" class="ro-focus"><h4>{{ display(outline[selected].title) }}</h4><ul v-if="outline[selected].points.length"><li v-for="(point,index) in outline[selected].points.slice(0,6)" :key="index">{{ display(point) }}</li></ul><p v-else>{{ display(excerpt(outline[selected].content)) }}</p></div>
+    <div v-if="outline[selected]" class="ro-focus"><h4>{{ cleanNumberedTitle(outline[selected].title) }}</h4><ul v-if="outline[selected].points.length"><li v-for="(point,index) in outline[selected].points.slice(0,6)" :key="index">{{ display(point) }}</li></ul><p v-else>{{ display(excerpt(outline[selected].content)) }}</p></div>
     <div class="ro-original"><button :aria-expanded="originalOpen" @click="originalOpen = !originalOpen"><SIcon :name="originalOpen ? 'up' : 'book'" :size="14" />{{ originalOpen ? '收起完整原文' : '阅读完整原文' }}</button><MarkdownViewer v-if="originalOpen" :content="content" /></div>
   </section>
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { resourceOutline, resourceExcerpt } from '@/utils/resourceOutline'
-import { cleanDisplayText as display } from '@/utils/displayText'
+import { cleanDisplayText as display, cleanNumberedTitle } from '@/utils/displayText'
 import SIcon from './SIcon.vue'
 import MarkdownViewer from './MarkdownViewer.vue'
 const props = defineProps<{ content:string; type:string }>()

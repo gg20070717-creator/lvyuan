@@ -76,7 +76,7 @@
             <div v-if="planning && !plan" class="ow-plan-loading" role="status"><span class="ow-spinner"></span><strong>旅鸢正在安排学习顺序</strong><p>结合你的目标与已有基础，规划 {{ totalGroups }} 个分组。</p></div>
             <template v-else-if="plan">
               <p v-if="plan.fallback" class="ow-fallback">已准备基础学习顺序，可按你的想法继续调整。</p>
-              <ol class="ow-route-list"><li v-for="(id, index) in visibleRoute" :key="id"><span class="ow-route-number">{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ groupTitle(id) }}</strong><small>{{ groupBook(id) }}</small></div><span v-if="groupStatus[id] === 'mastered'" class="ow-mastered-tag">已有基础</span></li></ol>
+              <ol class="ow-route-list"><li v-for="(id, index) in visibleRoute" :key="id"><span class="ow-route-number">{{ String(index + 1).padStart(2, '0') }}</span><div><strong>{{ cleanNumberedTitle(groupTitle(id)) }}</strong><small>{{ groupBook(id) }}</small></div><span v-if="groupStatus[id] === 'mastered'" class="ow-mastered-tag">已有基础</span></li></ol>
               <button v-if="plan.route.group_order.length > 5" class="ow-route-expand" :aria-expanded="routeExpanded" @click="routeExpanded = !routeExpanded">{{ routeExpanded ? '收起完整路线' : `展开完整学习路线（${plan.route.group_order.length} 组）` }}<SIcon :name="routeExpanded ? 'up' : 'down'" :size="14" /></button>
               <div class="ow-feedback"><label class="ow-sr-only" for="ow-feedback">希望调整学习顺序？</label><textarea id="ow-feedback" v-model="feedback" rows="3" :disabled="busy" placeholder="希望调整学习顺序？写下你的想法…"></textarea><button v-if="feedback.trim()" class="ow-btn secondary" :disabled="busy" @click="generatePlan(true)">{{ planning ? '正在调整…' : '按反馈调整路线' }}</button></div>
             </template>
@@ -106,6 +106,7 @@ import { answerQa, fetchOnboardingGroups, fetchOnboardingQuestions, getLatestLea
 import type { OnbDomain, OnbPersona, OnbQuestion, PlanResult, QaState } from '@/api/onboarding'
 import { clearOnboardingDraft, readOnboardingDraft, saveOnboardingDraft } from '@/utils/onboardingDraft'
 import type { OnboardingStage } from '@/utils/onboardingDraft'
+import { cleanNumberedTitle } from '@/utils/displayText'
 
 const emit = defineEmits<{ (e: 'done'): void; (e: 'cancel'): void }>()
 const store = useAppStore()
